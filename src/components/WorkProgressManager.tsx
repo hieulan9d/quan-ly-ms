@@ -33,6 +33,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
   onRequireAdmin,
   onSaveSite,
   onSaveTask,
+  onDeleteTask,
   onDeleteSite,
 }) => {
   const isAgency = currentCompany === 'agency';
@@ -479,6 +480,23 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                                 ← Lùi
                               </button>
                             )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!isAdmin) {
+                                  onRequireAdmin?.();
+                                  return;
+                                }
+                                if (window.confirm(`Xóa task "${task.title}"?`)) {
+                                  onDeleteTask(task.id);
+                                }
+                              }}
+                              className="text-slate-300 hover:text-rose-500 p-1"
+                              title="Xóa task"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
 
                             {column.key !== 'done' && (
                               <button
