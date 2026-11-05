@@ -56,6 +56,7 @@ export function loadAgencyRates(): AgencyRateConfig {
 
 export function saveAgencyRates(rates: AgencyRateConfig) {
   localStorage.setItem(AGENCY_RATES_KEY, JSON.stringify(rates));
+  void syncCollection('rates', [{ id: 'default', ...rates }]);
 }
 
 export interface SupabaseConfig {
@@ -140,6 +141,7 @@ export function loadEmployees(): Employee[] {
 
 export function saveEmployees(employees: Employee[]) {
   localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(employees));
+  void syncCollection('employees', employees);
 }
 
 export function loadSites(): ConstructionSite[] {
@@ -157,6 +159,7 @@ export function loadSites(): ConstructionSite[] {
 
 export function saveSites(sites: ConstructionSite[]) {
   localStorage.setItem(SITES_KEY, JSON.stringify(sites));
+  void syncCollection('sites', sites);
 }
 
 export function loadTasks(): AgencyTask[] {
@@ -174,6 +177,7 @@ export function loadTasks(): AgencyTask[] {
 
 export function saveTasks(tasks: AgencyTask[]) {
   localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+  void syncCollection('tasks', tasks);
 }
 
 // ---------------- AGENCY PROJECTS / KHÁCH HÀNG ----------------
@@ -193,6 +197,7 @@ export function loadAgencyProjects(): AgencyProject[] {
 
 export function saveAgencyProjects(projects: AgencyProject[]) {
   localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  void syncCollection('projects', projects);
 }
 
 export function loadAttendance(): AttendanceRecord[] {
@@ -210,6 +215,7 @@ export function loadAttendance(): AttendanceRecord[] {
 
 export function saveAttendance(attendance: AttendanceRecord[]) {
   localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(attendance));
+  void syncCollection('attendance', attendance);
 }
 
 const TOCOTEA_SAMPLE_ITEMS: ContentCalendarItem[] = [
@@ -296,6 +302,7 @@ export function loadCalendar(): ContentCalendarItem[] {
 
 export function saveCalendar(calendar: ContentCalendarItem[]) {
   localStorage.setItem(CALENDAR_KEY, JSON.stringify(calendar));
+  void syncCollection('calendar', calendar);
 }
 
 // Format tiền tệ VND tiện lợi
@@ -311,4 +318,97 @@ export function formatDateVN(dateStr?: string): string {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
   return dateStr;
+}
+
+// ----------------- ĐỒNG BỘ SUPABASE (bảng app_records) -----------------
+// Mỗi phần tử của mỗi danh sách là 1 dòng: (collection, id, data JSON).
+// Không cấu hình Supabase thì tất cả hàm bên dưới không làm gì, app chạy bằng localStorage như cũ.
+
+export type SyncCollection = 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects' | 'rates';
+
+const COLLECTION_KEYS: Record<SyncCollection, string> = {
+  employees: EMPLOYEES_KEY,
+  sites: SITES_KEY,
+  tasks: TASKS_KEY,
+  attendance: ATTENDANCE_KEY,
+  calendar: CALENDAR_KEY,
+  projects: PROJECTS_KEY,
+  rates: AGENCY_RATES_KEY,
+};
+
+const syncSnapshots: Partial<Record<SyncCollection, Map<string, string>>> = {};
+let syncQueue: Promise<void> = Promise.resolve();
+let pendingSyncs = 0;
+
+export function hasPendingSync(): boolean {
+  return pendingSyncs > 0;
+}
+
+export function syncCollection(collection: SyncCollection, items: { id: string }[]): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return Promise.resolve();
+  pendingSyncs++;
+  syncQueue = syncQueue
+    .then(async () => {
+      const snap = syncSnapshots[collection] ?? new Map<string, string>();
+      const next = new Map(items.map((i) => [i.id, JSON.stringify(i)] as [string, string]));
+      const now = new Date().toISOString();
+      const upserts = items
+        .filter((i) => snap.get(i.id) !== next.get(i.id))
+        .map((i) => ({ collection, id: i.id, data: i, updated_at: now }));
+      const removed = [...snap.keys()].filter((id) => !next.has(id));
+
+      if (upserts.length > 0) {
+        const { error } = await client.from('app_records').upsert(upserts, { onConflict: 'collection,id' });
+        if (error) throw error;
+      }
+      if (removed.length > 0) {
+        const { error } = await client.from('app_records').delete().eq('collection', collection).in('id', removed);
+        if (error) throw error;
+      }
+      syncSnapshots[collection] = next;
+    })
+    .catch((e) => {
+      console.error('Supabase sync error (' + collection + '):', e);
+    })
+    .finally(() => {
+      pendingSyncs--;
+    });
+  return syncQueue;
+}
+
+export type RemoteData = Record<SyncCollection, any[]>;
+
+// Tải toàn bộ dữ liệu từ Supabase. Trả về null nếu chưa cấu hình hoặc lỗi.
+export async function pullRemote(): Promise<RemoteData | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data, error } = await client.from('app_records').select('collection,id,data').limit(50000);
+  if (error) {
+    console.error('Supabase pull error:', error.message);
+    return null;
+  }
+  const result: RemoteData = { employees: [], sites: [], tasks: [], attendance: [], calendar: [], projects: [], rates: [] };
+  (Object.keys(result) as SyncCollection[]).forEach((c) => {
+    syncSnapshots[c] = new Map();
+  });
+  for (const row of data || []) {
+    const c = row.collection as SyncCollection;
+    if (!result[c]) continue;
+    result[c].push(row.data);
+    syncSnapshots[c]!.set(row.id, JSON.stringify(row.data));
+  }
+  return result;
+}
+
+// Lưu bản dữ liệu vừa tải từ Supabase vào localStorage (để lần mở sau hiện ngay).
+export function cacheCollectionLocally(collection: SyncCollection, items: any[]) {
+  if (collection === 'rates') {
+    const r = items[0];
+    if (r) {
+      localStorage.setItem(AGENCY_RATES_KEY, JSON.stringify({ contentRate: r.contentRate, shootRate: r.shootRate, editRate: r.editRate }));
+    }
+    return;
+  }
+  localStorage.setItem(COLLECTION_KEYS[collection], JSON.stringify(items));
 }

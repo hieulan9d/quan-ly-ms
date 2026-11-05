@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   CompanyId,
   Employee,
@@ -23,6 +23,10 @@ import {
   loadAgencyProjects,
   saveAgencyProjects,
   loadAgencyRates,
+  pullRemote,
+  syncCollection,
+  hasPendingSync,
+  cacheCollectionLocally,
   saveAgencyRates,
 } from './services/db';
 
@@ -92,6 +96,65 @@ export function App() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(loadAttendance);
   const [calendarItems, setCalendarItems] = useState<ContentCalendarItem[]>(loadCalendar);
   const [agencyRates, setAgencyRates] = useState<AgencyRateConfig>(loadAgencyRates);
+
+  // Đồng bộ Supabase: tải khi mở app, tải lại mỗi 20 giây và khi quay lại tab.
+  const localRef = useRef({ employees, sites, tasks, agencyProjects, attendance, calendarItems, agencyRates });
+  localRef.current = { employees, sites, tasks, agencyProjects, attendance, calendarItems, agencyRates };
+  useEffect(() => {
+    let cancelled = false;
+    let first = true;
+    const refresh = async () => {
+      const remote = await pullRemote();
+      if (!remote || cancelled || hasPendingSync()) return;
+      const local = localRef.current;
+      const apply = <T extends { id: string }>(
+        name: 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects',
+        localItems: T[],
+        setter: (v: T[]) => void
+      ) => {
+        const remoteItems = remote[name] as T[];
+        if (remoteItems.length === 0) {
+          // Lần đầu: Supabase còn trống thì đẩy dữ liệu đang có trên máy lên.
+          if (first && localItems.length > 0) void syncCollection(name, localItems);
+          return;
+        }
+        if (JSON.stringify(remoteItems) !== JSON.stringify(localItems)) {
+          cacheCollectionLocally(name, remoteItems);
+          setter(remoteItems);
+        }
+      };
+      apply('employees', local.employees, setEmployees);
+      apply('sites', local.sites, setSites);
+      apply('tasks', local.tasks, setTasks);
+      apply('attendance', local.attendance, setAttendance);
+      apply('calendar', local.calendarItems, setCalendarItems);
+      apply('projects', local.agencyProjects, setAgencyProjects);
+      const r = remote.rates[0];
+      if (!r) {
+        if (first) void syncCollection('rates', [{ id: 'default', ...local.agencyRates }]);
+      } else if (
+        r.contentRate !== local.agencyRates.contentRate ||
+        r.shootRate !== local.agencyRates.shootRate ||
+        r.editRate !== local.agencyRates.editRate
+      ) {
+        const rates = { contentRate: r.contentRate, shootRate: r.shootRate, editRate: r.editRate };
+        cacheCollectionLocally('rates', [rates]);
+        setAgencyRates(rates);
+      }
+      first = false;
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   const handleSaveAgencyRates = (rates: AgencyRateConfig) => {
     setAgencyRates(rates);
