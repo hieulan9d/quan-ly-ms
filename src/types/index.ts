@@ -2,6 +2,13 @@ export type CompanyId = 'agency' | 'lam_song';
 
 export type WageType = 'daily' | 'monthly' | 'piecework';
 
+// Bảng đơn giá công việc chung cho toàn bộ nhân sự MS angency
+export interface AgencyRateConfig {
+  contentRate: number; // VNĐ / 1 bài Viết Content hoặc Kịch bản
+  shootRate: number;   // VNĐ / 1 buổi (lần) Đi Quay
+  editRate: number;    // VNĐ / 1 video Edit hoàn thiện
+}
+
 export interface Employee {
   id: string;
   companyId: CompanyId;
@@ -9,9 +16,13 @@ export interface Employee {
   phone: string;
   role: string;
   wageType: WageType;
-  baseRate: number;
+  baseRate: number; // Lương cứng tháng hoặc Đơn giá công nhật (0 nếu chỉ tính theo việc)
   otRate: number;
   allowance: number;
+  // Đơn giá tính tiền riêng theo từng đầu việc cho MS angency:
+  contentRate?: number; // VNĐ / 1 bài Content hoặc Kịch bản
+  shootRate?: number;   // VNĐ / 1 lần Đi Quay
+  editRate?: number;    // VNĐ / 1 video Edit hoàn thiện
   avatar?: string;
   active: boolean;
 }
@@ -25,6 +36,10 @@ export interface AttendanceRecord {
   checkOutTime?: string;
   workUnits: number;
   otHours: number;
+  // Số lượng công việc hoàn thành trong ngày (dành cho MS angency tính theo việc)
+  contentCount?: number;
+  shootCount?: number;
+  editCount?: number;
   locationType: 'office' | 'remote' | 'site';
   siteName?: string;
   latitude?: number;
@@ -116,16 +131,16 @@ export interface ConstructionSite {
 // ---------------- AGENCY DỰ ÁN & KHÁCH HÀNG ----------------
 export interface AgencyProject {
   id: string;
-  name: string; // Tên dự án / Khách hàng (VD: "Feel Chicken", "TocoTea Vietnam", "Nha Khoa Flora"...)
-  clientContact?: string; // Người liên hệ / Chức vụ
-  phone?: string; // SĐT liên hệ
-  servicePackage?: string; // Gói dịch vụ (VD: "Gói TikTok & Fanpage 25 bài", "Gói Video Chuyển Đổi"...)
-  monthlyRetainer?: number; // Ngân sách / Phí dịch vụ hàng tháng
-  targetPostsPerMonth?: number; // KPI số bài hoặc video trong tháng (VD: 25)
+  name: string;
+  clientContact?: string;
+  phone?: string;
+  servicePackage?: string;
+  monthlyRetainer?: number;
+  targetPostsPerMonth?: number;
   startDate?: string;
   status: 'active' | 'completed' | 'paused';
   notes?: string;
-  color?: string; // Màu nhận diện thương hiệu
+  color?: string;
 }
 
 export interface AgencyTask {
@@ -144,6 +159,13 @@ export interface PayrollSummaryItem {
   employee: Employee;
   totalWorkUnits: number;
   totalOtHours: number;
+  // Thống kê công việc cho MS angency:
+  contentCount?: number;
+  shootCount?: number;
+  editCount?: number;
+  contentPay?: number;
+  shootPay?: number;
+  editPay?: number;
   basePay: number;
   otPay: number;
   allowancePay: number;

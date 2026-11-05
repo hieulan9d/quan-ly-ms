@@ -6,13 +6,13 @@ import {
   AttendanceRecord,
   ContentCalendarItem,
   AgencyProject,
+  AgencyRateConfig,
 } from '../types';
 import {
   INITIAL_EMPLOYEES,
   INITIAL_CONSTRUCTION_SITES,
   INITIAL_AGENCY_TASKS,
   INITIAL_ATTENDANCE,
-  INITIAL_CONTENT_CALENDAR,
   INITIAL_AGENCY_PROJECTS,
 } from '../data/mockData';
 import { FEEL_CHICKEN_ITEMS } from '../data/feelChickenCalendar';
@@ -24,8 +24,39 @@ const TASKS_KEY = 'app_tasks_data';
 const ATTENDANCE_KEY = 'app_attendance_data';
 const CALENDAR_KEY = 'app_calendar_data';
 const PROJECTS_KEY = 'app_agency_projects_data';
+const AGENCY_RATES_KEY = 'app_agency_shared_rates';
 const SUPABASE_CONFIG_KEY = 'app_supabase_config';
 const GEMINI_API_KEY = 'app_gemini_api_key';
+
+export const DEFAULT_AGENCY_RATES: AgencyRateConfig = {
+  contentRate: 100000, // 100.000đ / 1 bài Content
+  shootRate: 300000,   // 300.000đ / 1 lần Đi Quay
+  editRate: 200000,    // 200.000đ / 1 video Edit
+};
+
+export function loadAgencyRates(): AgencyRateConfig {
+  const data = localStorage.getItem(AGENCY_RATES_KEY);
+  if (data) {
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed && typeof parsed.contentRate === 'number') {
+        return {
+          contentRate: Number(parsed.contentRate || 0),
+          shootRate: Number(parsed.shootRate || 0),
+          editRate: Number(parsed.editRate || 0),
+        };
+      }
+    } catch {
+      // fallback
+    }
+  }
+  localStorage.setItem(AGENCY_RATES_KEY, JSON.stringify(DEFAULT_AGENCY_RATES));
+  return DEFAULT_AGENCY_RATES;
+}
+
+export function saveAgencyRates(rates: AgencyRateConfig) {
+  localStorage.setItem(AGENCY_RATES_KEY, JSON.stringify(rates));
+}
 
 export interface SupabaseConfig {
   url: string;
@@ -77,7 +108,28 @@ export function loadEmployees(): Employee[] {
   const data = localStorage.getItem(EMPLOYEES_KEY);
   if (data) {
     try {
-      return JSON.parse(data);
+      const parsed: Employee[] = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        let needsSave = false;
+        const migrated = parsed.map((emp) => {
+          if (emp.companyId === 'agency' && emp.contentRate === undefined && emp.shootRate === undefined && emp.editRate === undefined) {
+            needsSave = true;
+            return {
+              ...emp,
+              wageType: 'piecework' as const,
+              baseRate: 0,
+              contentRate: emp.id === 'emp_ag_2' ? 150000 : 100000,
+              shootRate: emp.id === 'emp_ag_1' ? 400000 : 300000,
+              editRate: emp.id === 'emp_ag_3' ? 250000 : 200000,
+            };
+          }
+          return emp;
+        });
+        if (needsSave) {
+          localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(migrated));
+        }
+        return migrated;
+      }
     } catch {
       // fallback
     }
@@ -214,7 +266,6 @@ export function loadCalendar(): ContentCalendarItem[] {
     try {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Đảm bảo các sự kiện Lịch quay & Lịch edit Thứ 2 và TocoTea luôn có mặt để xem ngay
         const hasMondayShoot = parsed.some((p: any) => p.id === 'cal_fc_shoot_monday');
         const hasTocoTea = parsed.some((p: any) => p.client === 'TocoTea Vietnam');
         

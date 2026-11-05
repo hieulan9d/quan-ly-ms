@@ -532,13 +532,13 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
           </div>
 
           {/* Tiến độ KPI & Ngân sách */}
-          <div className="flex items-center gap-4 border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5 shrink-0">
+          <div className="flex flex-wrap items-center justify-between sm:justify-start gap-3 sm:gap-4 border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5">
             <div>
               <div className="text-[11px] font-bold text-slate-500 mb-0.5 flex items-center justify-between">
                 <span>Tiến độ KPI tháng:</span>
                 <span className="font-black text-purple-700 ml-2">{completedCount}/{targetKpi} bài ({kpiPercent}%)</span>
               </div>
-              <div className="w-40 sm:w-48 bg-slate-100 h-2 rounded-full overflow-hidden">
+              <div className="w-36 sm:w-48 bg-slate-100 h-2 rounded-full overflow-hidden">
                 <div
                   className="bg-emerald-500 h-full rounded-full transition-all duration-500"
                   style={{ width: `${kpiPercent}%` }}
@@ -596,7 +596,7 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
               onClick={() => handleOpenAddModalForDay('05/10', 'Thứ 2')}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md active:scale-95"
@@ -709,9 +709,19 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
 
       {/* ---------------- 3. GIAO DIỆN LỊCH DẠNG Ô 7 CỘT (THEO DỰ ÁN) ---------------- */}
       {viewMode === 'grid' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-5 shadow-sm overflow-x-auto">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 p-3 sm:p-5 shadow-sm overflow-x-auto">
+          <div className="md:hidden text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-xl px-3 py-1.5 mb-2.5 flex items-center justify-between gap-2">
+            <span>↔️ Vuốt ngang để xem lịch 7 cột hoặc chọn chế độ Danh sách</span>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className="bg-purple-600 text-white font-bold px-2 py-0.5 rounded-lg text-[10px] shrink-0"
+            >
+              📋 Xem Danh sách
+            </button>
+          </div>
           {/* 7 Tiêu đề thứ: Thứ 2 -> Chủ nhật */}
-          <div className="grid grid-cols-7 gap-2 min-w-[950px] mb-2 text-center">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2 min-w-[740px] lg:min-w-[950px] mb-2 text-center">
             {['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'].map((name) => (
               <div
                 key={name}
@@ -723,7 +733,7 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
           </div>
 
           {/* Lưới 35 ô ngày */}
-          <div className="grid grid-cols-7 gap-2 min-w-[950px]">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2 min-w-[740px] lg:min-w-[950px]">
             {daysGrid.map((cell, idx) => {
               const dayItems = itemsByDay[cell.dayNumber] || [];
               const hasEvents = dayItems.length > 0;

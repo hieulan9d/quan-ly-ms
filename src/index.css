@@ -9,15 +9,88 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html,
 body {
   margin: 0;
   padding: 0;
-  background-color: #f8fafc;
+  background-color: #faf8f2;
   color: #0f172a;
   min-height: 100vh;
+  overflow-x: hidden;
   /* Support iPhone safe area (notch & home bar) */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pb-safe {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
+/* Frosted Mint - Aura */
+.aura-bg {
+  position: relative;
+  overflow-x: hidden;
+  min-height: 100vh; /* height must be explicit - absolute layers add none */
+  /* NO background-color - layers blend against body */
+}
+
+/* Layer 1 - normal */
+.aura-layer-1 {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(236,253,245,0.96) 0%, rgba(167,243,208,0.58) 50%, rgba(110,231,183,0.30) 100%);
+  mix-blend-mode: normal;
+  transform: translateZ(0);
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* Layer 2 - multiply */
+.aura-layer-2 {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 50% 45% at 30% 40%, rgba(52,211,153,0.26) 0%, transparent 68%);
+  mix-blend-mode: multiply;
+  filter: blur(3px); /* 4px on desktop */
+  transform: translateZ(0);
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* Layer 3 - multiply */
+.aura-layer-3 {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 45% 50% at 72% 60%, rgba(45,212,191,0.20) 0%, transparent 70%);
+  mix-blend-mode: multiply;
+  filter: blur(50px); /* 72px on desktop */
+  transform: translateZ(0);
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* Layer 4 - multiply */
+.aura-layer-4 {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255,255,255,0.62) 0%, transparent 45%, rgba(255,255,255,0.32) 100%);
+  mix-blend-mode: multiply;
+  filter: blur(45px); /* 65px on desktop */
+  transform: translateZ(0);
+  will-change: transform;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .aura-layer-2 {
+    filter: blur(4px);
+  }
+  .aura-layer-3 {
+    filter: blur(72px);
+  }
+  .aura-layer-4 {
+    filter: blur(65px);
+  }
 }
 
 /* Custom scrollbars */

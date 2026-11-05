@@ -2,24 +2,16 @@ import React, { useState } from 'react';
 import { ConstructionSite, Employee, DailySiteSchedule } from '../types';
 import { formatDateVN } from '../services/db';
 import {
-  Calendar,
   Clock,
   MapPin,
   Users,
   CheckCircle2,
-  AlertTriangle,
   Plus,
   Hammer,
-  TrendingUp,
-  Award,
-  ChevronRight,
   Trash2,
-  Phone,
   Building2,
-  FileText,
   Edit3,
   Lock,
-  ShieldCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -280,17 +272,17 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Banner thông báo quyền Admin */}
       {!isAdmin && (
-        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
               <Lock className="w-5 h-5 text-amber-700" />
             </div>
             <div>
-              <div className="font-extrabold text-amber-950 text-sm flex items-center gap-2">
-                <span>Chế độ Xem Dự Án Ốp Tường (Chỉ Admin Mới Sửa Được)</span>
+              <div className="font-extrabold text-amber-950 text-xs sm:text-sm flex flex-wrap items-center gap-1.5">
+                <span>Chế độ Xem Dự Án MS ốp tường (Chỉ Admin Mới Sửa Được)</span>
                 <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">Chỉ xem</span>
               </div>
               <div className="text-xs text-amber-800 mt-0.5">
@@ -308,11 +300,11 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
       )}
 
       {/* Header & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-            <Hammer className="w-5 h-5 text-orange-600" />
-            <span>Quản Lý Dự Án Ốp Tường & Lịch Điều Đội Thợ</span>
+          <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+            <Hammer className="w-5 h-5 text-orange-600 shrink-0" />
+            <span>Quản Lý Dự Án MS ốp tường & Lịch Điều Đội Thợ</span>
           </h2>
           <p className="text-xs text-slate-500">
             Tạo dự án mới, theo dõi số ngày dự tính vs thực tế, phân công lịch làm việc chi tiết
@@ -320,21 +312,21 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
         </div>
 
         {/* NÚT TẠO DỰ ÁN MỚI NỔI BẬT */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             onClick={handleOpenAddProject}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
+            className="flex-1 sm:flex-initial justify-center bg-orange-600 hover:bg-orange-700 text-white font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95 whitespace-nowrap"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ Tạo Dự Án / Công Trình Mới</span>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>+ Tạo Dự Án Mới</span>
           </button>
 
           <button
             onClick={handleOpenAddDispatch}
-            className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm"
+            className="flex-1 sm:flex-initial justify-center bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
           >
-            <Clock className="w-4 h-4 text-orange-600" />
-            <span className="hidden sm:inline">Phân Công Lịch Thợ</span>
+            <Clock className="w-4 h-4 text-orange-600 shrink-0" />
+            <span>Phân Công Lịch Thợ</span>
           </button>
         </div>
       </div>
@@ -348,9 +340,9 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
 
       {/* ---------------- 1. BẢNG SO SÁNH DỰ TÍNH VS THỰC TẾ CHO TỪNG CÔNG TRÌNH ---------------- */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
-            <Building2 className="w-4 h-4 text-orange-600" />
+            <Building2 className="w-4 h-4 text-orange-600 shrink-0" />
             <span>Danh Sách Dự Án / Công Trình Đang Quản Lý ({sites.length} công trình)</span>
           </h3>
           <button
@@ -361,14 +353,15 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Responsive: 1 col (Phone) / 2 cols (Tablet) / 3 cols (PC) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {sites.map((site) => {
             const estimated = site.estimatedDays || 5;
             const actual = site.actualDays || 3;
             const isCompleted = site.status === 'completed';
 
             // Đánh giá hiệu suất thời gian:
-            let diffDays = estimated - actual;
+            const diffDays = estimated - actual;
             let statusText = '';
             let badgeColor = '';
 
@@ -399,7 +392,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
               <div
                 key={site.id}
                 onClick={() => setSelectedSiteId(site.id)}
-                className={`bg-white rounded-2xl border p-4 sm:p-5 transition cursor-pointer shadow-sm relative overflow-hidden flex flex-col justify-between ${
+                className={`bg-white/95 backdrop-blur-sm rounded-2xl border p-4 sm:p-5 transition cursor-pointer shadow-sm relative overflow-hidden flex flex-col justify-between ${
                   isSelected
                     ? 'border-orange-500 ring-2 ring-orange-200 shadow-md'
                     : 'border-slate-200 hover:border-orange-300'
@@ -408,7 +401,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="font-extrabold text-sm text-slate-900 line-clamp-1">{site.name}</h3>
-                    <span className="text-[10px] font-bold text-slate-400">
+                    <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">
                       {isCompleted ? '✓ Bàn giao' : 'Đang chạy'}
                     </span>
                   </div>
@@ -476,12 +469,12 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
       </div>
 
       {/* ---------------- 2. LỊCH LÀM VIỆC CHI TIẾT HÔM NAY (AI LÀM - Ở ĐÂU - MẤY GIỜ) ---------------- */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+      <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-              <h3 className="font-extrabold text-base text-slate-900">
+              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
                 Lịch Làm Việc Hôm Nay ({formatDateVN(todayStr)})
               </h3>
             </div>
@@ -497,7 +490,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
 
         {allTodaySchedules.length === 0 ? (
           <div className="text-center py-6 text-slate-400 text-xs">
-            Hôm nay chưa có lịch điều thợ cụ thể. Bạn có thể bấm nút <b>"+ Phân Công Lịch Thợ"</b> ở góc trên để tạo lịch!
+            Hôm nay chưa có lịch điều thợ cụ thể. Bạn có thể bấm nút <b>"Phân Công Lịch Thợ"</b> ở góc trên để tạo lịch!
           </div>
         ) : (
           <div className="space-y-3">
@@ -507,7 +500,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
               return (
                 <div
                   key={schedule.id}
-                  className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition"
+                  className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                     <div>
@@ -548,9 +541,11 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                     </div>
                   </div>
 
-                  <div className="mt-2.5 flex items-center gap-2 text-xs">
-                    <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="text-slate-500 font-semibold">Thợ phụ trách:</span>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-slate-500 font-semibold">Thợ phụ trách:</span>
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
                       {assignedStaff.map((w) => (
                         <span
@@ -571,10 +566,10 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
 
       {/* ---------------- 3. TẤT CẢ LỊCH LÀM VIỆC CỦA CÔNG TRÌNH ĐANG CHỌN ---------------- */}
       {selectedSite && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
-              <h3 className="font-extrabold text-base text-slate-900">
+              <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
                 Toàn Bộ Lịch Thi Công: {selectedSite.name}
               </h3>
               <p className="text-xs text-slate-500">
@@ -623,7 +618,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                     className="p-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition flex flex-wrap items-center justify-between gap-3 text-xs"
                   >
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-black text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded">
                           {formatDateVN(ds.date)}
                         </span>
@@ -634,7 +629,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                       <div className="font-bold text-slate-800 text-sm mt-1">
                         {ds.taskDescription}
                       </div>
-                      <div className="text-slate-500 mt-1 flex items-center gap-1">
+                      <div className="text-slate-500 mt-1 flex flex-wrap items-center gap-1">
                         <span>Thợ:</span>
                         <span className="font-semibold text-slate-700">
                           {assignedStaff.map((w) => w.name).join(', ')}
@@ -662,11 +657,11 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
 
       {/* ---------------- MODAL TẠO DỰ ÁN / CÔNG TRÌNH MỚI ---------------- */}
       {showAddProjectModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="font-black text-base text-slate-900 mb-1 flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-orange-600" />
-              <span>Tạo Dự Án / Công Trình Ốp Lam Sóng Mới</span>
+              <Building2 className="w-5 h-5 text-orange-600 shrink-0" />
+              <span>Tạo Dự Án / Công Trình MS ốp tường Mới</span>
             </h3>
             <p className="text-xs text-slate-500 mb-4">
               Nhập thông tin công trình, diện tích m² và số ngày dự tính làm xong
@@ -685,7 +680,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Tên chủ nhà / Khách hàng:</label>
                   <input
@@ -722,7 +717,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Tổng khối lượng cần ốp (m²):
@@ -764,7 +759,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Ngày bắt đầu khởi công:</label>
                   <input
@@ -819,8 +814,8 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
 
       {/* ---------------- MODAL THÊM LỊCH ĐIỀU THỢ MỚI ---------------- */}
       {showAddDispatchModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="font-black text-base text-slate-900 mb-1">
               Phân Công Lịch Làm Việc & Điều Đội Thợ
             </h3>
@@ -846,7 +841,7 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Ngày bao nhiêu:
@@ -879,13 +874,13 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Ai làm (Chọn những thợ được điều đến):
                 </label>
-                <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 max-h-36 overflow-y-auto">
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 max-h-36 overflow-y-auto">
                   {workers.map((w) => {
                     const isChecked = newSchedule.workerIds.includes(w.id);
                     return (
                       <label
                         key={w.id}
-                        className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white p-1 rounded transition"
+                        className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white p-1.5 rounded transition"
                       >
                         <input
                           type="checkbox"
@@ -950,15 +945,15 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
 
       {/* ---------------- MODAL CHỈNH SỬA DỰ ÁN (CHỈ ADMIN) ---------------- */}
       {editingProject && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-4 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-start justify-between gap-3 pb-3 mb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-orange-100 text-orange-700">
+                <div className="p-2.5 rounded-xl bg-orange-100 text-orange-700 shrink-0">
                   <Building2 className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-black text-base text-slate-900">
                       Chỉnh Sửa Dự Án / Công Trình
                     </h3>

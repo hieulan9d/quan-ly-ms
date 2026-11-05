@@ -7,6 +7,7 @@ import {
   AgencyTask,
   ContentCalendarItem,
   AgencyProject,
+  AgencyRateConfig,
 } from './types';
 import {
   loadEmployees,
@@ -21,9 +22,12 @@ import {
   saveCalendar,
   loadAgencyProjects,
   saveAgencyProjects,
+  loadAgencyRates,
+  saveAgencyRates,
 } from './services/db';
 
 import { Header } from './components/Header';
+import { AuraBackground } from './components/AuraBackground';
 import { Dashboard } from './components/Dashboard';
 import { AttendanceManager } from './components/AttendanceManager';
 import { WorkProgressManager } from './components/WorkProgressManager';
@@ -45,7 +49,6 @@ import {
   DollarSign,
   Calendar,
   Hammer,
-  Bot
 } from 'lucide-react';
 
 export function App() {
@@ -88,6 +91,12 @@ export function App() {
   const [agencyProjects, setAgencyProjects] = useState<AgencyProject[]>(loadAgencyProjects);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(loadAttendance);
   const [calendarItems, setCalendarItems] = useState<ContentCalendarItem[]>(loadCalendar);
+  const [agencyRates, setAgencyRates] = useState<AgencyRateConfig>(loadAgencyRates);
+
+  const handleSaveAgencyRates = (rates: AgencyRateConfig) => {
+    setAgencyRates(rates);
+    saveAgencyRates(rates);
+  };
 
   // Switch company handler
   const handleSwitchCompany = (company: CompanyId) => {
@@ -209,7 +218,7 @@ export function App() {
   const isAgency = currentCompany === 'agency';
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-8 flex flex-col font-sans">
+    <AuraBackground>
       {/* 1. Header with Company Switcher & Tools */}
       <Header
         currentCompany={currentCompany}
@@ -222,13 +231,13 @@ export function App() {
         onAdminLogout={handleAdminLogout}
       />
 
-      {/* 2. Desktop Navigation Tab Bar */}
-      <div className="bg-white border-b border-slate-200 hidden md:block">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <nav className="flex space-x-5 text-sm font-bold overflow-x-auto">
+      {/* 2. Tablet & Desktop Navigation Tab Bar */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/80 hidden md:block">
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8">
+          <nav className="flex space-x-3 lg:space-x-6 text-xs lg:text-sm font-bold overflow-x-auto no-scrollbar">
             <button
               onClick={() => setCurrentTab('dashboard')}
-              className={`py-3.5 border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+              className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
                 currentTab === 'dashboard'
                   ? isAgency
                     ? 'border-purple-600 text-purple-600'
@@ -236,7 +245,7 @@ export function App() {
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              <LayoutDashboard className="w-4 h-4" />
+              <LayoutDashboard className="w-4 h-4 shrink-0" />
               <span>Tổng Quan</span>
             </button>
 
@@ -244,13 +253,13 @@ export function App() {
             {isAgency && (
               <button
                 onClick={() => setCurrentTab('calendar')}
-                className={`py-3.5 border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+                className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
                   currentTab === 'calendar'
                     ? 'border-purple-600 text-purple-600'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <Calendar className="w-4 h-4 text-purple-600" />
+                <Calendar className="w-4 h-4 text-purple-600 shrink-0" />
                 <span>Kế Hoạch</span>
               </button>
             )}
@@ -259,20 +268,20 @@ export function App() {
             {!isAgency && (
               <button
                 onClick={() => setCurrentTab('schedule')}
-                className={`py-3.5 border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+                className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
                   currentTab === 'schedule'
                     ? 'border-orange-600 text-orange-600'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <Hammer className="w-4 h-4 text-orange-600" />
+                <Hammer className="w-4 h-4 text-orange-600 shrink-0" />
                 <span>Lịch Thợ & Dự Tính vs Thực Tế</span>
               </button>
             )}
 
             <button
               onClick={() => setCurrentTab('attendance')}
-              className={`py-3.5 border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+              className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
                 currentTab === 'attendance'
                   ? isAgency
                     ? 'border-purple-600 text-purple-600'
@@ -280,13 +289,13 @@ export function App() {
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Clock className="w-4 h-4" />
+              <Clock className="w-4 h-4 shrink-0" />
               <span>Chấm Công & Điểm Danh</span>
             </button>
 
             <button
               onClick={() => setCurrentTab('progress')}
-              className={`py-3.5 border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+              className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
                 currentTab === 'progress'
                   ? isAgency
                     ? 'border-purple-600 text-purple-600'
@@ -294,13 +303,13 @@ export function App() {
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Layers className="w-4 h-4" />
+              <Layers className="w-4 h-4 shrink-0" />
               <span>{isAgency ? 'Tasks Kanban' : 'Tiến Độ m² & Ảnh'}</span>
             </button>
 
             <button
               onClick={() => setCurrentTab('staff')}
-              className={`py-3.5 border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+              className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
                 currentTab === 'staff'
                   ? isAgency
                     ? 'border-purple-600 text-purple-600'
@@ -308,13 +317,13 @@ export function App() {
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Users className="w-4 h-4" />
+              <Users className="w-4 h-4 shrink-0" />
               <span>Nhân Sự & Tiền Công</span>
             </button>
 
             <button
               onClick={() => setCurrentTab('payroll')}
-              className={`py-3.5 border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+              className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
                 currentTab === 'payroll'
                   ? isAgency
                     ? 'border-purple-600 text-purple-600'
@@ -322,7 +331,7 @@ export function App() {
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              <DollarSign className="w-4 h-4" />
+              <DollarSign className="w-4 h-4 shrink-0" />
               <span>Tính Lương & Xuất Excel</span>
             </button>
           </nav>
@@ -330,7 +339,7 @@ export function App() {
       </div>
 
       {/* 3. Main Content Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-5">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-5 lg:px-8 py-4 sm:py-6 pb-24 md:pb-8">
         {currentTab === 'dashboard' && (
           <Dashboard
             currentCompany={currentCompany}
@@ -338,6 +347,7 @@ export function App() {
             attendance={attendance}
             sites={sites}
             tasks={tasks}
+            agencyRates={agencyRates}
             onNavigateTab={(tab) => setCurrentTab(tab as any)}
           />
         )}
@@ -376,6 +386,7 @@ export function App() {
             employees={employees}
             sites={sites}
             attendance={attendance}
+            agencyRates={agencyRates}
             isAdmin={isAdmin}
             onRequireAdmin={handleRequireAdmin}
             onSaveAttendance={handleSaveAttendance}
@@ -403,6 +414,8 @@ export function App() {
           <StaffAndWageManager
             currentCompany={currentCompany}
             employees={employees}
+            agencyRates={agencyRates}
+            onSaveAgencyRates={handleSaveAgencyRates}
             isAdmin={isAdmin}
             onRequireAdmin={handleRequireAdmin}
             onSaveEmployee={handleSaveEmployee}
@@ -415,92 +428,113 @@ export function App() {
             currentCompany={currentCompany}
             employees={employees}
             attendance={attendance}
+            calendarItems={calendarItems}
+            agencyRates={agencyRates}
+            onSaveAgencyRates={handleSaveAgencyRates}
             isAdmin={isAdmin}
             onRequireAdmin={handleRequireAdmin}
           />
         )}
       </main>
 
-      {/* 4. iPhone Mobile Bottom Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 md:hidden pb-safe">
-        <div className="grid grid-cols-5 text-center py-2 px-1">
+      {/* 4. Mobile Bottom Navigation Bar (Full 6 Tabs) */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg md:hidden pb-safe">
+        <div className="grid grid-cols-6 text-center py-1.5 px-0.5">
           <button
             onClick={() => setCurrentTab('dashboard')}
-            className={`flex flex-col items-center gap-0.5 text-[10px] font-bold ${
+            className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
               currentTab === 'dashboard'
                 ? isAgency
-                  ? 'text-purple-600'
-                  : 'text-orange-600'
-                : 'text-slate-500'
+                  ? 'text-purple-600 bg-purple-50/70'
+                  : 'text-orange-600 bg-orange-50/70'
+                : 'text-slate-500 active:bg-slate-100'
             }`}
           >
-            <LayoutDashboard className="w-5 h-5" />
-            <span>Tổng quan</span>
+            <LayoutDashboard className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="truncate max-w-full px-0.5">Tổng quan</span>
           </button>
 
-          {/* Nút chuyên biệt giữa màn hình mobile */}
+          {/* Nút chuyên biệt theo công ty */}
           {isAgency ? (
             <button
               onClick={() => setCurrentTab('calendar')}
-              className={`flex flex-col items-center gap-0.5 text-[10px] font-bold ${
-                currentTab === 'calendar' ? 'text-purple-600' : 'text-slate-500'
+              className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                currentTab === 'calendar'
+                  ? 'text-purple-600 bg-purple-50/70'
+                  : 'text-slate-500 active:bg-slate-100'
               }`}
             >
-              <Calendar className="w-5 h-5" />
-              <span>Kế Hoạch</span>
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="truncate max-w-full px-0.5">Kế hoạch</span>
             </button>
           ) : (
             <button
               onClick={() => setCurrentTab('schedule')}
-              className={`flex flex-col items-center gap-0.5 text-[10px] font-bold ${
-                currentTab === 'schedule' ? 'text-orange-600' : 'text-slate-500'
+              className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                currentTab === 'schedule'
+                  ? 'text-orange-600 bg-orange-50/70'
+                  : 'text-slate-500 active:bg-slate-100'
               }`}
             >
-              <Hammer className="w-5 h-5" />
-              <span>Lịch Thợ</span>
+              <Hammer className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="truncate max-w-full px-0.5">Lịch thợ</span>
             </button>
           )}
 
           <button
             onClick={() => setCurrentTab('attendance')}
-            className={`flex flex-col items-center gap-0.5 text-[10px] font-bold ${
+            className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
               currentTab === 'attendance'
                 ? isAgency
-                  ? 'text-purple-600'
-                  : 'text-orange-600'
-                : 'text-slate-500'
+                  ? 'text-purple-600 bg-purple-50/70'
+                  : 'text-orange-600 bg-orange-50/70'
+                : 'text-slate-500 active:bg-slate-100'
             }`}
           >
-            <Clock className="w-5 h-5" />
-            <span>Chấm công</span>
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="truncate max-w-full px-0.5">Chấm công</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('progress')}
+            className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
+              currentTab === 'progress'
+                ? isAgency
+                  ? 'text-purple-600 bg-purple-50/70'
+                  : 'text-orange-600 bg-orange-50/70'
+                : 'text-slate-500 active:bg-slate-100'
+            }`}
+          >
+            <Layers className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="truncate max-w-full px-0.5">{isAgency ? 'Kanban' : 'Tiến độ'}</span>
           </button>
 
           <button
             onClick={() => setCurrentTab('staff')}
-            className={`flex flex-col items-center gap-0.5 text-[10px] font-bold ${
+            className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
               currentTab === 'staff'
                 ? isAgency
-                  ? 'text-purple-600'
-                  : 'text-orange-600'
-                : 'text-slate-500'
+                  ? 'text-purple-600 bg-purple-50/70'
+                  : 'text-orange-600 bg-orange-50/70'
+                : 'text-slate-500 active:bg-slate-100'
             }`}
           >
-            <Users className="w-5 h-5" />
-            <span>Tiền công</span>
+            <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="truncate max-w-full px-0.5">Nhân sự</span>
           </button>
 
           <button
             onClick={() => setCurrentTab('payroll')}
-            className={`flex flex-col items-center gap-0.5 text-[10px] font-bold ${
+            className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
               currentTab === 'payroll'
                 ? isAgency
-                  ? 'text-purple-600'
-                  : 'text-orange-600'
-                : 'text-slate-500'
+                  ? 'text-purple-600 bg-purple-50/70'
+                  : 'text-orange-600 bg-orange-50/70'
+                : 'text-slate-500 active:bg-slate-100'
             }`}
           >
-            <DollarSign className="w-5 h-5" />
-            <span>Bảng lương</span>
+            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="truncate max-w-full px-0.5">Lương</span>
           </button>
         </div>
       </div>
@@ -531,7 +565,7 @@ export function App() {
         onClose={() => setIsAdminModalOpen(false)}
         onLoginSuccess={handleAdminLoginSuccess}
       />
-    </div>
+    </AuraBackground>
   );
 }
 

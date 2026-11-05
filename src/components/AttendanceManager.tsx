@@ -1,29 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CompanyId, Employee, AttendanceRecord, ConstructionSite } from '../types';
-import { formatDateVN, formatCurrency } from '../services/db';
+import { CompanyId, Employee, AttendanceRecord, ConstructionSite, AgencyRateConfig } from '../types';
+import { formatDateVN, formatCurrency, DEFAULT_AGENCY_RATES } from '../services/db';
 import {
   Clock,
-  Camera,
-  MapPin,
   CheckCircle,
   Users,
   Calendar,
-  AlertCircle,
-  Sparkles,
   ChevronRight,
   ShieldCheck,
   Trash2,
   HardHat,
   Building,
   Save,
-  Check,
   Zap,
   ChevronLeft,
-  Briefcase,
-  Layers,
-  ArrowRight,
   Lock,
-  ShieldAlert
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -32,6 +23,7 @@ interface AttendanceManagerProps {
   employees: Employee[];
   sites: ConstructionSite[];
   attendance: AttendanceRecord[];
+  agencyRates?: AgencyRateConfig;
   isAdmin?: boolean;
   onRequireAdmin?: () => void;
   onSaveAttendance: (record: AttendanceRecord) => void;
@@ -44,6 +36,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   employees,
   sites,
   attendance,
+  agencyRates = DEFAULT_AGENCY_RATES,
   isAdmin = false,
   onRequireAdmin,
   onSaveAttendance,
@@ -63,7 +56,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   // Default site name
   const defaultSiteName = companySites[0]?.name || 'Kho xưởng sản xuất & gia công tấm';
 
-  // ---------------- STATE CHO ỐP TƯỜNG LAM SÓNG (BẢNG QUẢN LÝ) ----------------
+  // ---------------- STATE CHO MS ỐP TƯỜNG (BẢNG QUẢN LÝ) ----------------
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -207,10 +200,6 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       return;
     }
     const recordsToSave: AttendanceRecord[] = [];
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(
-      now.getMinutes()
-    ).padStart(2, '0')}`;
 
     companyEmployees.forEach((emp) => {
       const row = workerRows[emp.id] || {
@@ -295,15 +284,17 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
     };
   }, [companyEmployees, workerRows]);
 
-  // ---------------- STATE CHO AGENCY (VĂN PHÒNG & TỰ CHẤM CÔNG) ----------------
+  // ---------------- STATE CHO AGENCY (BÁO CÁO VIỆC CONTENT / QUAY / EDIT & CHẤM CÔNG) ----------------
   const [agencySubTab, setAgencySubTab] = useState<'self' | 'history'>('self');
   const [agencyEmpId, setAgencyEmpId] = useState<string>(companyEmployees[0]?.id || '');
   const [agencyLocationType, setAgencyLocationType] = useState<'office' | 'remote' | 'site'>('office');
   const [agencyWorkUnits, setAgencyWorkUnits] = useState<number>(1);
   const [agencyOtHours, setAgencyOtHours] = useState<number>(0);
+  const [agencyContentCount, setAgencyContentCount] = useState<number>(0);
+  const [agencyShootCount, setAgencyShootCount] = useState<number>(0);
+  const [agencyEditCount, setAgencyEditCount] = useState<number>(0);
   const [agencyNote, setAgencyNote] = useState<string>('');
-  const [agencyGps, setAgencyGps] = useState<{ lat: number; lng: number } | null>(null);
-  const [isAgencyGettingGps, setIsAgencyGettingGps] = useState(false);
+  const [agencyGps] = useState<{ lat: number; lng: number } | null>(null);
   const [agencyPhoto, setAgencyPhoto] = useState<string | null>(null);
 
   // History table filter
@@ -312,6 +303,12 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   const filteredAttendance = attendance.filter(
     (a) => a.companyId === currentCompany && (historyFilterDate ? a.date === historyFilterDate : true)
   );
+
+  // Tính tiền công hôm nay dựa trên Bảng Đơn Giá Chung MS angency
+  const estimatedTodayAgencyPay =
+    (agencyContentCount || 0) * (agencyRates.contentRate || 0) +
+    (agencyShootCount || 0) * (agencyRates.shootRate || 0) +
+    (agencyEditCount || 0) * (agencyRates.editRate || 0);
 
   // Agency Submit Check-in
   const handleAgencySelfSubmit = (e: React.FormEvent) => {
@@ -332,10 +329,13 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       checkInTime: timeStr,
       workUnits: agencyWorkUnits,
       otHours: Number(agencyOtHours),
+      contentCount: Number(agencyContentCount) || 0,
+      shootCount: Number(agencyShootCount) || 0,
+      editCount: Number(agencyEditCount) || 0,
       locationType: agencyLocationType,
       siteName:
         agencyLocationType === 'office'
-          ? 'Văn phòng Agency'
+          ? 'Văn phòng MS angency'
           : agencyLocationType === 'remote'
           ? 'Làm việc từ xa (WFH)'
           : 'Đi quay / Hiện trường chụp hình',
@@ -344,7 +344,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       photoUrl: agencyPhoto || undefined,
       note: agencyNote,
       status: agencyWorkUnits === 0.5 ? 'half_day' : 'present',
-      verifiedBy: agencyGps ? 'GPS Định Vị Hợp Lệ' : 'Tự Chấm Công',
+      verifiedBy: agencyGps ? 'GPS Định Vị Hợp Lệ' : 'Báo Cáo Công Việc',
     };
 
     onSaveAttendance(newRecord);
@@ -354,27 +354,27 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       // ignore
     }
 
-    setSuccessMessage(`Đã chấm công Agency thành công lúc ${timeStr}!`);
+    setSuccessMessage(`Đã ghi nhận công việc & chấm công MS angency thành công lúc ${timeStr}!`);
     setTimeout(() => setSuccessMessage(''), 4000);
     setAgencyPhoto(null);
     setAgencyNote('');
   };
 
   // =========================================================================
-  // GIAO DIỆN 1: DÀNH RIÊNG CHO ỐP TƯỜNG LAM SÓNG (1 BẢNG CHẤM CÔNG QUẢN LÝ DUY NHẤT)
+  // GIAO DIỆN 1: DÀNH RIÊNG CHO MS ỐP TƯỜNG (1 BẢNG CHẤM CÔNG QUẢN LÝ DUY NHẤT)
   // =========================================================================
   if (!isAgency) {
     return (
-      <div className="space-y-5 max-w-6xl mx-auto">
+      <div className="space-y-4 sm:space-y-5 max-w-6xl mx-auto">
         {/* Banner thông báo quyền Admin */}
         {!isAdmin && (
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
                 <Lock className="w-5 h-5 text-amber-700" />
               </div>
               <div>
-                <div className="font-extrabold text-amber-950 text-sm flex items-center gap-2">
+                <div className="font-extrabold text-amber-950 text-xs sm:text-sm flex flex-wrap items-center gap-1.5">
                   <span>Chế độ Xem Bảng Chấm Công (Chỉ Admin Mới Được Sửa)</span>
                   <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">Chỉ xem</span>
                 </div>
@@ -394,24 +394,24 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
 
         {/* Success Alert */}
         {successMessage && (
-          <div className="p-3.5 bg-emerald-50 border-2 border-emerald-400 text-emerald-900 rounded-2xl text-center font-black text-sm flex items-center justify-center gap-2 shadow-md animate-bounce">
+          <div className="p-3.5 bg-emerald-50 border-2 border-emerald-400 text-emerald-900 rounded-2xl text-center font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md animate-bounce">
             <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
 
         {/* 1. THANH ĐIỀU HÀNH CHẤM CÔNG: CHỌN NGÀY & THỐNG KÊ NHANH */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-4 sm:p-5">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-md p-3.5 sm:p-5">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3.5 sm:gap-4">
             {/* Header info */}
             <div>
-              <div className="flex items-center gap-2">
-                <span className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-md">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-md shrink-0">
                   <HardHat className="w-5 h-5" />
                 </span>
                 <div>
-                  <h2 className="text-lg font-black text-slate-900 leading-tight">
-                    Bảng Chấm Công Quản Lý Ốp Lam Sóng
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                    Bảng Chấm Công Quản Lý MS ốp tường
                   </h2>
                   <p className="text-xs text-slate-500">
                     Chọn nhanh ai đi làm, làm bao nhiêu công và thi công tại công trình nào
@@ -420,100 +420,100 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
               </div>
             </div>
 
-            {/* Quick date selector */}
-            <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => handleShiftDate(-1)}
-                className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1 shadow-sm transition"
-                title="Lùi 1 ngày"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Hôm trước</span>
-              </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+              {/* Quick date selector */}
+              <div className="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => handleShiftDate(-1)}
+                  className="px-2 sm:px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1 shadow-sm transition"
+                  title="Lùi 1 ngày"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Hôm trước</span>
+                </button>
 
-              <div className="flex items-center gap-1.5 px-2">
-                <Calendar className="w-4 h-4 text-orange-600 shrink-0" />
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-transparent text-sm font-black text-slate-900 focus:outline-none cursor-pointer"
-                />
+                <div className="flex items-center gap-1 px-1.5">
+                  <Calendar className="w-4 h-4 text-orange-600 shrink-0 hidden xs:inline" />
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="bg-transparent text-xs sm:text-sm font-black text-slate-900 focus:outline-none cursor-pointer"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(todayStr)}
+                  className={`px-2.5 sm:px-3 py-1.5 text-xs font-black rounded-xl border transition shadow-sm whitespace-nowrap ${
+                    selectedDate === todayStr
+                      ? 'bg-orange-600 text-white border-orange-600'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  Hôm nay
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleShiftDate(1)}
+                  className="px-2 sm:px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1 shadow-sm transition"
+                  title="Tới 1 ngày"
+                >
+                  <span className="hidden sm:inline">Hôm sau</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setSelectedDate(todayStr)}
-                className={`px-3 py-1.5 text-xs font-black rounded-xl border transition shadow-sm ${
-                  selectedDate === todayStr
-                    ? 'bg-orange-600 text-white border-orange-600'
-                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                Hôm nay
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleShiftDate(1)}
-                className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1 shadow-sm transition"
-                title="Tới 1 ngày"
-              >
-                <span className="hidden sm:inline">Hôm sau</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* NÚT LƯU BẢNG CÔNG TO TRÊN ĐẦU */}
-            <div>
+              {/* NÚT LƯU BẢNG CÔNG TO TRÊN ĐẦU */}
               <button
                 type="button"
                 onClick={handleSaveLamSongAttendance}
-                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black text-sm rounded-xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2 transition active:scale-95"
+                className="w-full sm:w-auto px-5 py-2.5 sm:py-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2 transition active:scale-95 whitespace-nowrap"
               >
-                <Save className="w-4 h-4" />
+                <Save className="w-4 h-4 shrink-0" />
                 <span>LƯU BẢNG CHẤM CÔNG</span>
               </button>
             </div>
           </div>
 
           {/* 4 THẺ THỐNG KÊ TRONG NGÀY ĐANG CHỌN */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100">
-            <div className="bg-orange-50/70 border border-orange-200 rounded-xl p-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mt-4 pt-4 border-t border-slate-100">
+            <div className="bg-orange-50/70 border border-orange-200 rounded-xl p-2.5 sm:p-3">
               <span className="text-[11px] font-bold text-orange-700 block">Thợ đi làm hôm nay:</span>
-              <span className="text-xl font-black text-orange-950">
+              <span className="text-lg sm:text-xl font-black text-orange-950">
                 {dailySummary.totalWorkersPresent}{' '}
                 <span className="text-xs font-bold text-orange-600">/ {companyEmployees.length} thợ</span>
               </span>
             </div>
 
-            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-2.5 sm:p-3">
               <span className="text-[11px] font-bold text-emerald-700 block">Tổng số công tính:</span>
-              <span className="text-xl font-black text-emerald-950">
+              <span className="text-lg sm:text-xl font-black text-emerald-950">
                 {dailySummary.totalUnits}{' '}
                 <span className="text-xs font-bold text-emerald-600">công</span>
               </span>
             </div>
 
-            <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3">
+            <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-2.5 sm:p-3">
               <span className="text-[11px] font-bold text-blue-700 block">Tăng ca (OT):</span>
-              <span className="text-xl font-black text-blue-950">
+              <span className="text-lg sm:text-xl font-black text-blue-950">
                 {dailySummary.totalOt}{' '}
                 <span className="text-xs font-bold text-blue-600">giờ</span>
               </span>
             </div>
 
-            <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-3">
+            <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-2.5 sm:p-3">
               <span className="text-[11px] font-bold text-purple-700 block">Tiền công ngày ước tính:</span>
-              <span className="text-base sm:text-lg font-black text-purple-950">
+              <span className="text-sm sm:text-lg font-black text-purple-950 block truncate">
                 {formatCurrency(dailySummary.estimatedCost)}
               </span>
             </div>
           </div>
 
           {/* TOOLBAR THAO TÁC NHANH CHO CẢ ĐỘI */}
-          <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl">
+          <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-slate-50 p-3 rounded-xl">
             <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-700">
               <span className="text-slate-500">Thao tác nhanh cho cả đội:</span>
               <button
@@ -521,18 +521,20 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                 onClick={handleMarkAllFullDay}
                 className="bg-white hover:bg-slate-100 text-emerald-700 border border-emerald-300 px-3 py-1.5 rounded-lg transition shadow-sm flex items-center gap-1 active:scale-95"
               >
-                <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                <Zap className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span>Chấm tất cả 1.0 công</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 w-full sm:w-auto">
-              <Building className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              <span className="text-slate-500 whitespace-nowrap">Áp dụng chung 1 công trình:</span>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 text-xs font-bold text-slate-700 w-full md:w-auto">
+              <div className="flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span className="text-slate-500 whitespace-nowrap">Áp dụng chung 1 công trình:</span>
+              </div>
               <select
                 value={bulkSiteName}
                 onChange={(e) => handleApplyBulkSite(e.target.value)}
-                className="flex-1 sm:flex-initial bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-orange-500"
+                className="w-full sm:w-auto bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-orange-500"
               >
                 {companySites.map((s) => (
                   <option key={s.id} value={s.name}>
@@ -546,11 +548,11 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
         </div>
 
         {/* 2. BẢNG CHẤM CÔNG TỪNG THỢ CHO QUẢN LÝ (GIAO DIỆN CHÍNH) */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-md overflow-hidden">
+          <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                <Users className="w-4 h-4 text-orange-600" />
+                <Users className="w-4 h-4 text-orange-600 shrink-0" />
                 <span>Danh Sách Thợ Thi Công ({companyEmployees.length} nhân sự)</span>
               </h3>
               <p className="text-xs text-slate-500">
@@ -563,7 +565,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
             </div>
           </div>
 
-          {/* Desktop Table & Mobile Card hybrid */}
+          {/* Responsive Grid: 1 col (Phone) / 2x2 Grid (Tablet) / 4 cols (PC) */}
           <div className="divide-y divide-slate-100">
             {companyEmployees.map((emp) => {
               const row = workerRows[emp.id] || {
@@ -582,15 +584,15 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
               return (
                 <div
                   key={emp.id}
-                  className={`p-4 sm:p-5 transition ${
+                  className={`p-3.5 sm:p-5 transition ${
                     row.workUnits === 0
                       ? 'bg-slate-50/70 opacity-60'
                       : 'hover:bg-orange-50/30'
                   }`}
                 >
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-                    {/* CỘT 1: THÔNG TIN THỢ (3/12) */}
-                    <div className="lg:col-span-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 sm:gap-4 items-center">
+                    {/* CỘT 1: THÔNG TIN THỢ (3/12 on PC, 1/2 on Tablet) */}
+                    <div className="md:col-span-1 lg:col-span-3">
                       <div className="flex items-center gap-3">
                         <div
                           className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm ${
@@ -605,9 +607,9 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                             .slice(-2)
                             .join('')}
                         </div>
-                        <div>
-                          <div className="font-black text-sm text-slate-900">{emp.name}</div>
-                          <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                        <div className="min-w-0">
+                          <div className="font-black text-sm text-slate-900 truncate">{emp.name}</div>
+                          <div className="text-[11px] font-bold text-slate-500 flex flex-wrap items-center gap-1">
                             <span className="text-orange-700">{emp.role}</span>
                             <span>•</span>
                             <span>{formatCurrency(emp.baseRate)}/công</span>
@@ -621,8 +623,8 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                       </div>
                     </div>
 
-                    {/* CỘT 2: CÔNG TRÌNH NÀO (3/12) */}
-                    <div className="lg:col-span-3">
+                    {/* CỘT 2: CÔNG TRÌNH NÀO (3/12 on PC, 1/2 on Tablet) */}
+                    <div className="md:col-span-1 lg:col-span-3">
                       <label className="block text-[11px] font-black text-slate-600 mb-1 lg:hidden">
                         Công trình thi công:
                       </label>
@@ -667,8 +669,8 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                       </div>
                     </div>
 
-                    {/* CỘT 3: SỐ CÔNG (3/12) */}
-                    <div className="lg:col-span-3">
+                    {/* CỘT 3: SỐ CÔNG (3/12 on PC, 1/2 on Tablet) */}
+                    <div className="md:col-span-1 lg:col-span-3">
                       <label className="block text-[11px] font-black text-slate-600 mb-1 lg:hidden">
                         Số công:
                       </label>
@@ -768,9 +770,9 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                       </div>
                     </div>
 
-                    {/* CỘT 4: TĂNG CA (OT) & TẠM TÍNH TIỀN CÔNG (3/12) */}
-                    <div className="lg:col-span-3">
-                      <div className="flex flex-col sm:flex-row lg:flex-col gap-2">
+                    {/* CỘT 4: TĂNG CA (OT) & TẠM TÍNH TIỀN CÔNG (3/12 on PC, 1/2 on Tablet) */}
+                    <div className="md:col-span-1 lg:col-span-3">
+                      <div className="flex flex-col gap-2">
                         {/* Selector OT */}
                         <div>
                           <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1">
@@ -786,7 +788,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                                 type="button"
                                 disabled={row.workUnits === 0}
                                 onClick={() => handleUpdateWorkerRow(emp.id, { otHours: h })}
-                                className={`flex-1 py-1 rounded-lg text-xs font-bold transition ${
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
                                   row.otHours === h && row.workUnits > 0
                                     ? 'bg-orange-500 text-white shadow'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40'
@@ -827,7 +829,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
             })}
           </div>
 
-          {/* CHÂN BẢNG: NÚT LƯU TO BẢN ĐỂ BẤM TRÊN IPHONE CỰC NHẠY */}
+          {/* CHÂN BẢNG: NÚT LƯU TO BẢN */}
           <div className="p-4 sm:p-5 bg-gradient-to-r from-orange-50 to-amber-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-xs text-slate-700 text-center sm:text-left">
               <span className="font-black text-slate-900">
@@ -841,20 +843,20 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
             <button
               type="button"
               onClick={handleSaveLamSongAttendance}
-              className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black text-base rounded-xl shadow-xl shadow-orange-300/50 flex items-center justify-center gap-2 transition active:scale-95"
+              className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black text-sm sm:text-base rounded-xl shadow-xl shadow-orange-300/50 flex items-center justify-center gap-2 transition active:scale-95 whitespace-nowrap"
             >
-              <CheckCircle className="w-5 h-5" />
+              <CheckCircle className="w-5 h-5 shrink-0" />
               <span>LƯU BẢNG CHẤM CÔNG HÔM NAY</span>
             </button>
           </div>
         </div>
 
         {/* 3. LỊCH SỬ CHẤM CÔNG CÁC NGÀY TRONG THÁNG (ĐỂ XEM LẠI & SỬA) */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <h3 className="font-black text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-600" />
+                <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
                 <span>Nhật Ký Chấm Công Đã Lưu (Lịch Sử Công Trình)</span>
               </h3>
               <p className="text-xs text-slate-500">
@@ -885,7 +887,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
+              <table className="w-full text-left text-xs sm:text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold">
                     <th className="py-2.5 px-3">Họ tên thợ</th>
@@ -902,17 +904,17 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                     const emp = employees.find((e) => e.id === rec.employeeId);
                     return (
                       <tr key={rec.id} className="hover:bg-slate-50/70 transition">
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="font-black text-slate-900">{emp?.name || 'Thợ'}</div>
                           <div className="text-[10px] text-slate-500">{emp?.role}</div>
                         </td>
                         <td className="py-2.5 px-3">
                           <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0"></span>
                             <span>{rec.siteName || 'Công trình'}</span>
                           </div>
                         </td>
-                        <td className="py-2.5 px-3 text-center">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           {rec.workUnits === 0 ? (
                             <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded text-xs">
                               Nghỉ
@@ -923,7 +925,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                             </span>
                           )}
                         </td>
-                        <td className="py-2.5 px-3 text-center">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           {rec.otHours > 0 ? (
                             <span className="font-black text-orange-700 bg-orange-50 px-2 py-0.5 rounded text-xs">
                               +{rec.otHours}h
@@ -937,9 +939,9 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                             {rec.note || '—'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                            <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                            <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             <span>{rec.verifiedBy || 'Quản lý'}</span>
                           </div>
                         </td>
@@ -965,7 +967,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
   }
 
   // =========================================================================
-  // GIAO DIỆN 2: DÀNH CHO AGENCY (CHẤM CÔNG VĂN PHÒNG, REMOTE WFH & ĐI QUAY)
+  // GIAO DIỆN 2: DÀNH CHO MS ANGENCY (CHẤM CÔNG VĂN PHÒNG, REMOTE WFH & ĐI QUAY)
   // =========================================================================
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
@@ -979,7 +981,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          📱 Chấm Công Agency
+          📱 Chấm Công MS angency
         </button>
         <button
           onClick={() => setAgencySubTab('history')}
@@ -1001,13 +1003,13 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       )}
 
       {agencySubTab === 'self' && (
-        <div className="max-w-lg mx-auto bg-white rounded-2xl border border-slate-200 shadow-md p-5 sm:p-6">
+        <div className="max-w-lg mx-auto bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-md p-4 sm:p-6">
           <div className="text-center mb-5">
-            <h2 className="text-lg font-black text-slate-900">
-              Chấm Công Nhân Viên Agency
+            <h2 className="text-base sm:text-lg font-black text-slate-900">
+              Báo Cáo Công Việc & Chấm Công MS angency
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Hỗ trợ làm việc tại Văn phòng, Remote WFH và Đi quay hiện trường
+              Nhập số lượng việc hoàn thành hôm nay (Content, Đi quay, Edit) để tự động tính tiền riêng mỗi việc
             </p>
           </div>
 
@@ -1023,10 +1025,77 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
               >
                 {companyEmployees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.role}) - {emp.wageType === 'daily' ? 'Công nhật' : 'Lương tháng'}
+                    {emp.name} ({emp.role}) - {emp.wageType === 'piecework' ? 'Tính theo việc' : emp.wageType === 'daily' ? 'Công nhật' : 'Lương tháng'}
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* SỐ LƯỢNG CÔNG VIỆC LÀM TRONG NGÀY (CONTENT / ĐI QUAY / EDIT) */}
+            <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-purple-900">
+                  🎯 SỐ LƯỢNG VIỆC HOÀN THÀNH HÔM NAY:
+                </span>
+                {estimatedTodayAgencyPay > 0 && (
+                  <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    +{formatCurrency(estimatedTodayAgencyPay)}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* 1. Viết Content */}
+                <div className="bg-white p-2.5 rounded-xl border border-purple-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    ✍️ Viết Content (bài)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={agencyContentCount}
+                    onChange={(e) => setAgencyContentCount(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-black text-slate-900 text-center"
+                  />
+                  <div className="text-[10px] text-slate-500 mt-1 text-center font-semibold">
+                    Đơn giá chung: {formatCurrency(agencyRates.contentRate)}/bài
+                  </div>
+                </div>
+
+                {/* 2. Đi Quay */}
+                <div className="bg-white p-2.5 rounded-xl border border-purple-200">
+                  <label className="block text-[11px] font-bold text-indigo-700 mb-1">
+                    🎬 Đi Quay (lần)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={agencyShootCount}
+                    onChange={(e) => setAgencyShootCount(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-black text-indigo-700 text-center"
+                  />
+                  <div className="text-[10px] text-slate-500 mt-1 text-center font-semibold">
+                    Đơn giá chung: {formatCurrency(agencyRates.shootRate)}/lần
+                  </div>
+                </div>
+
+                {/* 3. Edit Video */}
+                <div className="bg-white p-2.5 rounded-xl border border-purple-200">
+                  <label className="block text-[11px] font-bold text-amber-700 mb-1">
+                    ✂️ Edit Video (clip)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={agencyEditCount}
+                    onChange={(e) => setAgencyEditCount(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-black text-amber-700 text-center"
+                  />
+                  <div className="text-[10px] text-slate-500 mt-1 text-center font-semibold">
+                    Đơn giá chung: {formatCurrency(agencyRates.editRate)}/video
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -1037,7 +1106,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setAgencyLocationType('office')}
-                  className={`py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                  className={`py-2.5 px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold border transition ${
                     agencyLocationType === 'office'
                       ? 'bg-purple-50 border-purple-500 text-purple-700 shadow-sm'
                       : 'border-slate-200 text-slate-600'
@@ -1048,7 +1117,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setAgencyLocationType('remote')}
-                  className={`py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                  className={`py-2.5 px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold border transition ${
                     agencyLocationType === 'remote'
                       ? 'bg-purple-50 border-purple-500 text-purple-700 shadow-sm'
                       : 'border-slate-200 text-slate-600'
@@ -1059,7 +1128,7 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setAgencyLocationType('site')}
-                  className={`py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                  className={`py-2.5 px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold border transition ${
                     agencyLocationType === 'site'
                       ? 'bg-purple-50 border-purple-500 text-purple-700 shadow-sm'
                       : 'border-slate-200 text-slate-600'
@@ -1067,36 +1136,6 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                 >
                   🎬 Đi Quay Phim
                 </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Số công:</label>
-                <select
-                  value={agencyWorkUnits}
-                  onChange={(e) => setAgencyWorkUnits(Number(e.target.value))}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-800"
-                >
-                  <option value={1}>1.0 Công (Cả ngày)</option>
-                  <option value={0.5}>0.5 Công (Nửa ngày)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Tăng ca (OT):
-                </label>
-                <select
-                  value={agencyOtHours}
-                  onChange={(e) => setAgencyOtHours(Number(e.target.value))}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-800"
-                >
-                  <option value={0}>Không tăng ca (0h)</option>
-                  <option value={1}>1 tiếng</option>
-                  <option value={2}>2 tiếng</option>
-                  <option value={3}>3 tiếng (quay đêm)</option>
-                </select>
               </div>
             </div>
 
@@ -1116,10 +1155,10 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
             <div className="pt-2">
               <button
                 type="submit"
-                className="w-full py-3.5 rounded-xl text-white font-black text-base shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-purple-200"
+                className="w-full py-3.5 rounded-xl text-white font-black text-sm sm:text-base shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-purple-200"
               >
-                <CheckCircle className="w-5 h-5" />
-                <span>XÁC NHẬN CHẤM CÔNG AGENCY</span>
+                <CheckCircle className="w-5 h-5 shrink-0" />
+                <span>XÁC NHẬN GHI NHẬN CÔNG VIỆC</span>
               </button>
             </div>
           </form>
@@ -1127,11 +1166,11 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
       )}
 
       {agencySubTab === 'history' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-purple-600" />
-              <span>Bảng Ghi Nhận Chấm Công Agency</span>
+            <h2 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-purple-600 shrink-0" />
+              <span>Bảng Ghi Nhận Công Việc & Chấm Công MS angency</span>
             </h2>
 
             <div className="flex items-center gap-2">
@@ -1148,17 +1187,18 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
           {filteredAttendance.length === 0 ? (
             <div className="text-center py-10 text-slate-400">
               <Clock className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-              <p className="text-sm">Không có dữ liệu chấm công ngày {formatDateVN(historyFilterDate)}</p>
+              <p className="text-sm">Không có dữ liệu ngày {formatDateVN(historyFilterDate)}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
+              <table className="w-full text-left text-xs sm:text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                     <th className="py-2.5 px-3">Nhân sự</th>
-                    <th className="py-2.5 px-3">Giờ vào</th>
-                    <th className="py-2.5 px-3">Số công</th>
-                    <th className="py-2.5 px-3">Tăng ca (OT)</th>
+                    <th className="py-2.5 px-3">Giờ báo cáo</th>
+                    <th className="py-2.5 px-3 text-center">✍️ Content</th>
+                    <th className="py-2.5 px-3 text-center">🎬 Đi Quay</th>
+                    <th className="py-2.5 px-3 text-center">✂️ Edit Video</th>
                     <th className="py-2.5 px-3">Hình thức</th>
                     <th className="py-2.5 px-3">Ghi chú</th>
                     <th className="py-2.5 px-3 text-right">Xóa</th>
@@ -1169,28 +1209,29 @@ export const AttendanceManager: React.FC<AttendanceManagerProps> = ({
                     const emp = employees.find((e) => e.id === rec.employeeId);
                     return (
                       <tr key={rec.id} className="hover:bg-slate-50/70 transition">
-                        <td className="py-3 px-3">
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <div className="font-bold text-slate-900">{emp?.name || 'Nhân sự'}</div>
                           <div className="text-[11px] text-slate-500">{emp?.role}</div>
                         </td>
-                        <td className="py-3 px-3 font-mono font-semibold text-slate-700">
+                        <td className="py-3 px-3 font-mono font-semibold text-slate-700 whitespace-nowrap">
                           {rec.checkInTime}
                         </td>
-                        <td className="py-3 px-3">
-                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                            {rec.workUnits} công
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                            {rec.contentCount || 0} bài
                           </span>
                         </td>
-                        <td className="py-3 px-3">
-                          {rec.otHours > 0 ? (
-                            <span className="font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded">
-                              +{rec.otHours} giờ
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">0h</span>
-                          )}
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                            {rec.shootCount || 0} lần
+                          </span>
                         </td>
-                        <td className="py-3 px-3 font-medium text-slate-800">
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                            {rec.editCount || 0} video
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-medium text-slate-800 whitespace-nowrap">
                           {rec.siteName}
                         </td>
                         <td className="py-3 px-3 text-slate-500 italic">

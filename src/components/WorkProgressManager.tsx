@@ -3,18 +3,12 @@ import { CompanyId, ConstructionSite, AgencyTask, Employee } from '../types';
 import { formatDateVN } from '../services/db';
 import {
   Layers,
-  CheckCircle,
   Clock,
   Plus,
   Phone,
   MapPin,
   Camera,
-  Calendar,
-  Sparkles,
-  Edit,
   Trash2,
-  ChevronRight,
-  ExternalLink
 } from 'lucide-react';
 
 interface WorkProgressManagerProps {
@@ -40,7 +34,6 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
   onSaveSite,
   onSaveTask,
   onDeleteSite,
-  onDeleteTask,
 }) => {
   const isAgency = currentCompany === 'agency';
   const companyEmployees = employees.filter((e) => e.companyId === currentCompany && e.active);
@@ -214,15 +207,15 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* ---------------- A. TIẾN ĐỘ THI CÔNG CÔNG TRÌNH ỐP TƯỜNG LAM SÓNG ---------------- */}
+    <div className="space-y-4 sm:space-y-6">
+      {/* ---------------- A. TIẾN ĐỘ THI CÔNG CÔNG TRÌNH MS ỐP TƯỜNG ---------------- */}
       {!isAgency && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-orange-600" />
-                <span>Tiến Độ Các Công Trình Thi Công Lam Sóng</span>
+              <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-orange-600 shrink-0" />
+                <span>Tiến Độ Các Công Trình Thi Công MS ốp tường</span>
               </h2>
               <p className="text-xs text-slate-500">
                 Theo dõi khối lượng m² đã ốp, xem ảnh hiện trường thợ tải lên
@@ -231,9 +224,9 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
 
             <button
               onClick={handleOpenAddSite}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
+              className="w-full sm:w-auto justify-center bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 shrink-0" />
               <span>+ Thêm Công Trình Mới</span>
             </button>
           </div>
@@ -247,14 +240,14 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
               return (
                 <div
                   key={site.id}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition"
+                  className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition"
                 >
                   {/* Site Header */}
                   <div className="p-4 sm:p-5 border-b border-slate-100">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      <div className="min-w-0">
                         <span
-                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block ${
                             isCompleted
                               ? 'bg-emerald-100 text-emerald-700'
                               : site.status === 'installing'
@@ -270,27 +263,27 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                             ? 'Bắn khung xương'
                             : 'Đang chuẩn bị'}
                         </span>
-                        <h3 className="font-extrabold text-base text-slate-900 mt-1">
+                        <h3 className="font-extrabold text-sm sm:text-base text-slate-900 mt-1 break-words">
                           {site.name}
                         </h3>
                       </div>
 
                       <button
                         onClick={() => onDeleteSite(site.id)}
-                        className="text-slate-300 hover:text-rose-500 p-1"
+                        className="text-slate-300 hover:text-rose-500 p-1 shrink-0"
                         title="Xóa công trình"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
 
-                    <div className="mt-2.5 space-y-1 text-xs text-slate-600">
+                    <div className="mt-2.5 space-y-1.5 text-xs text-slate-600">
                       <div className="flex items-center gap-2">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="truncate">{site.address}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 font-medium text-slate-800">
                           <span>Chủ nhà: {site.clientName}</span>
                           {site.phone && (
                             <a
@@ -302,7 +295,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                             </a>
                           )}
                         </div>
-                        <span className="text-[11px] text-slate-400">
+                        <span className="text-[11px] text-slate-400 whitespace-nowrap">
                           Hạn: {formatDateVN(site.expectedEndDate) || 'Linh hoạt'}
                         </span>
                       </div>
@@ -313,7 +306,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                   <div className="p-4 sm:p-5 bg-slate-50/60">
                     <div className="flex items-center justify-between text-xs mb-1.5 font-bold">
                       <span className="text-slate-700">Khối lượng hoàn thành:</span>
-                      <span className="text-orange-600 text-sm">
+                      <span className="text-orange-600 text-xs sm:text-sm">
                         {site.completedAreaM2} / {site.totalAreaM2} m² ({pct}%)
                       </span>
                     </div>
@@ -337,9 +330,9 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                         setSelectedSiteForUpdate(site);
                         setAddedM2(10);
                       }}
-                      className="w-full py-2 px-3 bg-white hover:bg-orange-50 border border-orange-300 text-orange-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm"
+                      className="w-full py-2.5 px-3 bg-white hover:bg-orange-50 border border-orange-300 text-orange-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm"
                     >
-                      <Camera className="w-4 h-4 text-orange-600" />
+                      <Camera className="w-4 h-4 text-orange-600 shrink-0" />
                       <span>+ Cập nhật số m² & Đăng ảnh hiện trường</span>
                     </button>
                   </div>
@@ -381,11 +374,11 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
 
       {/* ---------------- B. TIẾN ĐỘ DỰ ÁN AGENCY (KANBAN BOARD) ---------------- */}
       {isAgency && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-purple-600" />
+              <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-purple-600 shrink-0" />
                 <span>Bảng Tiến Độ Dự Án & Tasks Khách Hàng (Kanban)</span>
               </h2>
               <p className="text-xs text-slate-500">
@@ -395,15 +388,15 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
 
             <button
               onClick={handleOpenAddTask}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
+              className="w-full sm:w-auto justify-center bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 shrink-0" />
               <span>+ Thêm Task Công Việc Mới</span>
             </button>
           </div>
 
-          {/* Kanban Columns */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Kanban Columns - 1 col (Phone) / 2 cols (Tablet) / 4 cols (PC) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             {(
               [
                 { key: 'todo', label: 'Cần Làm (Todo)', color: 'border-slate-300 text-slate-700' },
@@ -417,7 +410,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
               return (
                 <div
                   key={column.key}
-                  className="bg-slate-100/80 rounded-2xl p-3 border border-slate-200 flex flex-col min-h-[450px]"
+                  className="bg-white/75 backdrop-blur-sm rounded-2xl p-3 border border-slate-200 flex flex-col min-h-[180px] xl:min-h-[420px]"
                 >
                   <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-slate-200 font-bold text-xs">
                     <span className={column.color}>{column.label}</span>
@@ -426,7 +419,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                     </span>
                   </div>
 
-                  <div className="space-y-3 flex-1 overflow-y-auto">
+                  <div className="space-y-2.5 sm:space-y-3 flex-1 overflow-y-auto">
                     {colTasks.map((task) => {
                       const emp = employees.find((e) => e.id === task.assignedTo);
 
@@ -435,12 +428,12 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                           key={task.id}
                           className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow transition space-y-2"
                         >
-                          <div className="flex items-center justify-between text-[11px]">
-                            <span className="font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                          <div className="flex items-center justify-between text-[11px] gap-2">
+                            <span className="font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded truncate">
                               {task.client}
                             </span>
                             <span
-                              className={`font-semibold ${
+                              className={`font-semibold whitespace-nowrap ${
                                 task.priority === 'high'
                                   ? 'text-rose-600'
                                   : task.priority === 'medium'
@@ -458,11 +451,11 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                             <p className="text-xs text-slate-500 line-clamp-2">{task.notes}</p>
                           )}
 
-                          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
-                            <span className="font-medium text-slate-600 truncate max-w-[110px]">
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 gap-2">
+                            <span className="font-medium text-slate-600 truncate">
                               {emp?.name || 'Chưa gán'}
                             </span>
-                            <span className="text-[11px] text-slate-400">
+                            <span className="text-[11px] text-slate-400 whitespace-nowrap">
                               Hạn: {formatDateVN(task.deadline)}
                             </span>
                           </div>
@@ -481,7 +474,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                                       : 'todo'
                                   )
                                 }
-                                className="text-[10px] text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 px-2 py-0.5 rounded border border-slate-200"
+                                className="text-[10px] text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded border border-slate-200"
                               >
                                 ← Lùi
                               </button>
@@ -499,7 +492,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                                       : 'done'
                                   )
                                 }
-                                className="text-[10px] font-bold text-purple-600 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded border border-purple-200 ml-auto"
+                                className="text-[10px] font-bold text-purple-600 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded border border-purple-200 ml-auto"
                               >
                                 Tiến →
                               </button>
@@ -518,8 +511,8 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
 
       {/* ---------------- MODAL CẬP NHẬT M² & ĐĂNG ẢNH CÔNG TRÌNH ---------------- */}
       {selectedSiteForUpdate && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl animate-in fade-in">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto animate-in fade-in">
             <h3 className="font-black text-base text-slate-900 mb-1">
               Cập Nhật Tiến Độ: {selectedSiteForUpdate.name}
             </h3>
@@ -565,7 +558,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Chụp / Tải ảnh hiện trường từ iPhone:
+                  Chụp / Tải ảnh hiện trường từ điện thoại:
                 </label>
                 <input
                   type="file"
@@ -624,11 +617,11 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
 
       {/* ---------------- MODAL THÊM CÔNG TRÌNH MỚI (LAM SÓNG) ---------------- */}
       {showAddSiteModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="font-black text-base text-slate-900 mb-1">Thêm Công Trình Mới</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Nhập thông tin công trình ốp tường lam sóng để phân công thợ
+              Nhập thông tin công trình ốp tường để phân công thợ
             </p>
 
             <form onSubmit={handleCreateSite} className="space-y-3.5">
@@ -644,7 +637,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Tên chủ nhà:</label>
                   <input
@@ -681,7 +674,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Tổng diện tích (m²):</label>
                   <input
@@ -706,7 +699,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Ngày bắt đầu:</label>
                   <input
@@ -750,8 +743,8 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
 
       {/* ---------------- MODAL THÊM TASK MỚI (AGENCY) ---------------- */}
       {showAddTaskModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="font-black text-base text-slate-900 mb-1">Thêm Việc Mới Cho Team</h3>
             <p className="text-xs text-slate-500 mb-4">Gán task cho nhân viên và đặt hạn chót</p>
 
@@ -780,7 +773,7 @@ export const WorkProgressManager: React.FC<WorkProgressManagerProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Gán cho nhân viên:</label>
                   <select
