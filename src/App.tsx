@@ -264,6 +264,13 @@ export function App() {
     saveAgencyProjects(updated);
   };
 
+  const handleClearAllAgencyData = () => {
+    setAgencyProjects([]);
+    saveAgencyProjects([]);
+    setCalendarItems([]);
+    saveCalendar([]);
+  };
+
   // --- Handlers for Tasks (Agency) ---
   const handleSaveTask = (task: AgencyTask) => {
     const exists = tasks.some((t) => t.id === task.id);
@@ -442,6 +449,7 @@ export function App() {
             onBatchImport={handleBatchImportCalendar}
             onSaveProject={handleSaveAgencyProject}
             onDeleteProject={handleDeleteAgencyProject}
+            onClearAll={handleClearAllAgencyData}
           />
         )}
 

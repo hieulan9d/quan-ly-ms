@@ -62,6 +62,7 @@ interface AgencyContentCalendarProps {
   onBatchImport: (items: ContentCalendarItem[]) => void;
   onSaveProject?: (project: AgencyProject) => void;
   onDeleteProject?: (id: string) => void;
+  onClearAll?: () => void;
 }
 
 export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
@@ -75,6 +76,7 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
   onBatchImport,
   onSaveProject,
   onDeleteProject,
+  onClearAll,
 }) => {
   const agencyStaff = employees.filter((e) => e.companyId === 'agency' && e.active);
 
@@ -450,6 +452,29 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
               <FolderPlus className="w-4 h-4 text-slate-950" />
               <span>+ TẠO DỰ ÁN / KHÁCH HÀNG MỚI</span>
             </button>
+            {onClearAll && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isAdmin) {
+                    onRequireAdmin?.();
+                    return;
+                  }
+                  if (
+                    window.confirm(
+                      'Xóa TẤT CẢ khách hàng và toàn bộ lịch content? Việc này không thể hoàn tác.'
+                    )
+                  ) {
+                    onClearAll();
+                    setSelectedProjectName('all');
+                  }
+                }}
+                className="bg-red-50 hover:bg-red-100 text-red-700 font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl border border-red-200 transition flex items-center gap-2 active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>XÓA TẤT CẢ</span>
+              </button>
+            )}
           </div>
         </div>
 
