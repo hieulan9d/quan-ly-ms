@@ -27,6 +27,7 @@ const PROJECTS_KEY = 'app_agency_projects_data';
 const AGENCY_RATES_KEY = 'app_agency_shared_rates';
 const SUPABASE_CONFIG_KEY = 'app_supabase_config';
 const GEMINI_API_KEY = 'app_gemini_api_key';
+const SEED_DONE_KEY = 'app_seed_done'; // đã khởi tạo xong: không tự nạp lại dữ liệu mẫu
 
 export const DEFAULT_AGENCY_RATES: AgencyRateConfig = {
   contentRate: 100000, // 100.000đ / 1 bài Content
@@ -105,7 +106,21 @@ export function getSupabaseClient() {
 
 // ----------------- LOCAL DATA STORE WITH SUPABASE SYNC -----------------
 
+
+// Sau khi đã khởi tạo, danh sách rỗng là do người dùng xoá, không nạp lại dữ liệu mẫu nữa.
+function loadSeeded<T>(key: string): T[] | null {
+  if (!localStorage.getItem(SEED_DONE_KEY)) return null;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function loadEmployees(): Employee[] {
+  const seeded = loadSeeded<Employee>(EMPLOYEES_KEY);
+  if (seeded) return seeded;
   const data = localStorage.getItem(EMPLOYEES_KEY);
   if (data) {
     try {
@@ -145,6 +160,8 @@ export function saveEmployees(employees: Employee[]) {
 }
 
 export function loadSites(): ConstructionSite[] {
+  const seeded = loadSeeded<ConstructionSite>(SITES_KEY);
+  if (seeded) return seeded;
   const data = localStorage.getItem(SITES_KEY);
   if (data) {
     try {
@@ -163,6 +180,8 @@ export function saveSites(sites: ConstructionSite[]) {
 }
 
 export function loadTasks(): AgencyTask[] {
+  const seeded = loadSeeded<AgencyTask>(TASKS_KEY);
+  if (seeded) return seeded;
   const data = localStorage.getItem(TASKS_KEY);
   if (data) {
     try {
@@ -182,6 +201,8 @@ export function saveTasks(tasks: AgencyTask[]) {
 
 // ---------------- AGENCY PROJECTS / KHÁCH HÀNG ----------------
 export function loadAgencyProjects(): AgencyProject[] {
+  const seeded = loadSeeded<AgencyProject>(PROJECTS_KEY);
+  if (seeded) return seeded;
   const data = localStorage.getItem(PROJECTS_KEY);
   if (data) {
     try {
@@ -201,6 +222,8 @@ export function saveAgencyProjects(projects: AgencyProject[]) {
 }
 
 export function loadAttendance(): AttendanceRecord[] {
+  const seeded = loadSeeded<AttendanceRecord>(ATTENDANCE_KEY);
+  if (seeded) return seeded;
   const data = localStorage.getItem(ATTENDANCE_KEY);
   if (data) {
     try {
@@ -267,6 +290,8 @@ const TOCOTEA_SAMPLE_ITEMS: ContentCalendarItem[] = [
 
 // ---------------- CONTENT CALENDAR (AGENCY) ----------------
 export function loadCalendar(): ContentCalendarItem[] {
+  const seeded = loadSeeded<ContentCalendarItem>(CALENDAR_KEY);
+  if (seeded) return seeded;
   const data = localStorage.getItem(CALENDAR_KEY);
   if (data) {
     try {
@@ -339,6 +364,15 @@ const COLLECTION_KEYS: Record<SyncCollection, string> = {
 const syncSnapshots: Partial<Record<SyncCollection, Map<string, string>>> = {};
 let syncQueue: Promise<void> = Promise.resolve();
 let pendingSyncs = 0;
+let syncVersion = 0;
+
+export function getSyncVersion(): number {
+  return syncVersion;
+}
+
+export function markSeedDone() {
+  localStorage.setItem(SEED_DONE_KEY, '1');
+}
 
 export function hasPendingSync(): boolean {
   return pendingSyncs > 0;
@@ -348,6 +382,7 @@ export function syncCollection(collection: SyncCollection, items: { id: string }
   const client = getSupabaseClient();
   if (!client) return Promise.resolve();
   pendingSyncs++;
+  syncVersion++;
   syncQueue = syncQueue
     .then(async () => {
       const snap = syncSnapshots[collection] ?? new Map<string, string>();
@@ -377,7 +412,7 @@ export function syncCollection(collection: SyncCollection, items: { id: string }
   return syncQueue;
 }
 
-export type RemoteData = Record<SyncCollection, any[]>;
+export type RemoteData = Record<SyncCollection, any[]> & { seeded: boolean };
 
 // Tải toàn bộ dữ liệu từ Supabase. Trả về null nếu chưa cấu hình hoặc lỗi.
 export async function pullRemote(): Promise<RemoteData | null> {
@@ -388,13 +423,17 @@ export async function pullRemote(): Promise<RemoteData | null> {
     console.error('Supabase pull error:', error.message);
     return null;
   }
-  const result: RemoteData = { employees: [], sites: [], tasks: [], attendance: [], calendar: [], projects: [], rates: [] };
-  (Object.keys(result) as SyncCollection[]).forEach((c) => {
+  const result: RemoteData = { employees: [], sites: [], tasks: [], attendance: [], calendar: [], projects: [], rates: [], seeded: false };
+  (['employees', 'sites', 'tasks', 'attendance', 'calendar', 'projects', 'rates'] as SyncCollection[]).forEach((c) => {
     syncSnapshots[c] = new Map();
   });
   for (const row of data || []) {
+    if (row.collection === 'meta' && row.id === 'seeded') {
+      result.seeded = true;
+      continue;
+    }
     const c = row.collection as SyncCollection;
-    if (!result[c]) continue;
+    if (!Array.isArray(result[c])) continue;
     result[c].push(row.data);
     syncSnapshots[c]!.set(row.id, JSON.stringify(row.data));
   }
@@ -411,4 +450,14 @@ export function cacheCollectionLocally(collection: SyncCollection, items: any[])
     return;
   }
   localStorage.setItem(COLLECTION_KEYS[collection], JSON.stringify(items));
+}
+
+// Đánh dấu trên Supabase là đã khởi tạo xong.
+export async function markRemoteSeeded() {
+  const client = getSupabaseClient();
+  if (!client) return;
+  const { error } = await client
+    .from('app_records')
+    .upsert({ collection: 'meta', id: 'seeded', data: { done: true }, updated_at: new Date().toISOString() }, { onConflict: 'collection,id' });
+  if (error) console.error('Supabase seed marker error:', error.message);
 }

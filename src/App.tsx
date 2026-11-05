@@ -27,6 +27,9 @@ import {
   syncCollection,
   hasPendingSync,
   cacheCollectionLocally,
+  getSyncVersion,
+  markSeedDone,
+  markRemoteSeeded,
   saveAgencyRates,
 } from './services/db';
 
@@ -104,8 +107,9 @@ export function App() {
     let cancelled = false;
     let first = true;
     const refresh = async () => {
+      const versionBefore = getSyncVersion();
       const remote = await pullRemote();
-      if (!remote || cancelled || hasPendingSync()) return;
+      if (!remote || cancelled || hasPendingSync() || getSyncVersion() !== versionBefore) return;
       const local = localRef.current;
       const apply = <T extends { id: string }>(
         name: 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects',
@@ -114,8 +118,14 @@ export function App() {
       ) => {
         const remoteItems = remote[name] as T[];
         if (remoteItems.length === 0) {
-          // Lần đầu: Supabase còn trống thì đẩy dữ liệu đang có trên máy lên.
-          if (first && localItems.length > 0) void syncCollection(name, localItems);
+          if (!remote.seeded) {
+            // Lần khởi tạo đầu tiên: Supabase còn trống thì đẩy dữ liệu đang có trên máy lên.
+            if (first && localItems.length > 0) void syncCollection(name, localItems);
+          } else if (localItems.length > 0) {
+            // Đã khởi tạo: Supabase rỗng nghĩa là đã bị xoá hết, theo đó.
+            cacheCollectionLocally(name, []);
+            setter([]);
+          }
           return;
         }
         if (JSON.stringify(remoteItems) !== JSON.stringify(localItems)) {
@@ -131,7 +141,7 @@ export function App() {
       apply('projects', local.agencyProjects, setAgencyProjects);
       const r = remote.rates[0];
       if (!r) {
-        if (first) void syncCollection('rates', [{ id: 'default', ...local.agencyRates }]);
+        if (first && !remote.seeded) void syncCollection('rates', [{ id: 'default', ...local.agencyRates }]);
       } else if (
         r.contentRate !== local.agencyRates.contentRate ||
         r.shootRate !== local.agencyRates.shootRate ||
@@ -140,6 +150,10 @@ export function App() {
         const rates = { contentRate: r.contentRate, shootRate: r.shootRate, editRate: r.editRate };
         cacheCollectionLocally('rates', [rates]);
         setAgencyRates(rates);
+      }
+      if (first) {
+        markSeedDone();
+        if (!remote.seeded) void markRemoteSeeded();
       }
       first = false;
     };
