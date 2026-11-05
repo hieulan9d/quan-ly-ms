@@ -117,7 +117,7 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
   const todayStr = new Date().toISOString().split('T')[0];
 
   // ---------------- LỌC BÀI ĐĂNG THEO DỰ ÁN / KHÁCH HÀNG ĐANG CHỌN ----------------
-  const allItems = calendarItems.length > 0 ? calendarItems : FEEL_CHICKEN_ITEMS;
+  const allItems = calendarItems;
 
   const activeItems = useMemo(() => {
     if (selectedProjectName === 'all') return allItems;
