@@ -46,6 +46,21 @@ export async function fetchZaloBotStatus(baseUrl?: string): Promise<ZaloBotStatu
   return res.json();
 }
 
+export interface ZaloGroupItem {
+  id: string;
+  name: string;
+}
+
+export async function fetchZaloGroups(baseUrl?: string): Promise<{ groups: ZaloGroupItem[]; message?: string }> {
+  const base = resolveBotUrl(baseUrl || 'http://localhost:5005').replace(/\/(webhook|api)\/.*$/, '').replace(/\/$/, '');
+  try {
+    const res = await fetch(base + '/api/zalo/groups', { cache: 'no-store' });
+    return await res.json();
+  } catch (e: any) {
+    return { groups: [], message: 'Không kết nối được máy chủ bot (' + (e?.message || 'lỗi mạng') + ').' };
+  }
+}
+
 export async function sendReportNow(baseUrl?: string): Promise<{ ok: boolean; message: string }> {
   const base = resolveBotUrl(baseUrl || 'http://localhost:5005').replace(/\/(webhook|api)\/.*$/, '').replace(/\/$/, '');
   try {

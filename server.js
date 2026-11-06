@@ -272,7 +272,7 @@ const SITE_STATUS_LABEL = {
 /**
  * Ngữ cảnh dữ liệu THẬT từ Supabase cung cấp cho AI
  */
-async function getSystemContext() {
+async function getSystemContext(scope = 'all') {
   const now = new Date();
   const todayStr = now.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const today = isoDate(now);
@@ -286,11 +286,15 @@ async function getSystemContext() {
   }
 
   const empName = (id) => data.employees.find((e) => e.id === id)?.name || id;
+  const showOp = scope === 'all' || scope === 'op';
+  const showAg = scope === 'all' || scope === 'agency';
   const lines = [`HÔM NAY LÀ: ${todayStr} (${today})`, '', 'DỮ LIỆU THẬT TRÊN HỆ THỐNG (lấy từ ứng dụng web):'];
+  if (scope === 'op') lines.push('(Nhóm này CHỈ phụ trách khối Ốp Tường. Không bàn về Agency.)');
+  if (scope === 'agency') lines.push('(Nhóm này CHỈ phụ trách khối Agency. Không bàn về Ốp Tường.)');
 
-  lines.push('', '1. KHỐI ỐP TƯỜNG - CÔNG TRÌNH:');
-  if (data.sites.length === 0) lines.push('- Hiện chưa có công trình nào.');
-  for (const site of data.sites) {
+  if (showOp) lines.push('', '1. KHỐI ỐP TƯỜNG - CÔNG TRÌNH:');
+  if (showOp && data.sites.length === 0) lines.push('- Hiện chưa có công trình nào.');
+  for (const site of showOp ? data.sites : []) {
     const pct = site.totalAreaM2 ? Math.round((site.completedAreaM2 / site.totalAreaM2) * 100) : 0;
     lines.push(
       `- "${site.name}" tại ${site.address || '(chưa có địa chỉ)'}, khách: ${site.clientName || '(chưa có)'}`,
@@ -308,28 +312,31 @@ async function getSystemContext() {
     if (site.notes) lines.push(`  + Ghi chú: ${site.notes}`);
   }
 
-  lines.push('', '2. KHỐI AGENCY - CÔNG VIỆC (chưa hoàn thành):');
-  const openTasks = data.tasks.filter((t) => t.status !== 'done');
-  if (openTasks.length === 0) lines.push('- Không có task nào đang mở.');
+  if (showAg) lines.push('', '2. KHỐI AGENCY - CÔNG VIỆC (chưa hoàn thành):');
+  const openTasks = showAg ? data.tasks.filter((t) => t.status !== 'done') : [];
+  if (showAg && openTasks.length === 0) lines.push('- Không có task nào đang mở.');
   for (const t of openTasks.slice(0, 25)) {
     lines.push(`- [${t.status}] ${t.title} (khách: ${t.client}; phụ trách: ${t.assignedTo ? empName(t.assignedTo) : 'chưa gán'}; hạn: ${t.deadline || 'không có'})`);
   }
 
-  lines.push('', '3. LỊCH CONTENT / QUAY / EDIT:');
-  const pending = data.calendar.filter((c) => !c.isCompleted);
+  if (showAg) lines.push('', '3. LỊCH CONTENT / QUAY / EDIT:');
+  const pending = showAg ? data.calendar.filter((c) => !c.isCompleted) : [];
   const overdue = pending.filter((c) => c.editDeadline && c.editDeadline < today);
   const upcoming = pending
     .filter((c) => c.editDeadline && c.editDeadline >= today)
     .sort((a, b) => a.editDeadline.localeCompare(b.editDeadline))
     .slice(0, 15);
-  lines.push(`- Tổng ${data.calendar.length} mục, chưa xong ${pending.length}, trễ hạn ${overdue.length}.`);
+  if (showAg) lines.push(`- Tổng ${data.calendar.length} mục, chưa xong ${pending.length}, trễ hạn ${overdue.length}.`);
   for (const c of upcoming) {
     lines.push(`- Hạn ${c.editDeadline}: ${c.title} (${c.loai || 'Khác'}, khách: ${c.client})`);
   }
 
   lines.push('', '4. NHÂN SỰ:');
-  if (data.employees.length === 0) lines.push('- Chưa có nhân sự nào.');
-  for (const e of data.employees.filter((x) => x.active !== false)) {
+  const staff = data.employees.filter(
+    (x) => x.active !== false && (scope === 'all' || (scope === 'op' ? x.companyId === 'lam_song' : x.companyId === 'agency'))
+  );
+  if (staff.length === 0) lines.push('- Chưa có nhân sự nào.');
+  for (const e of staff) {
     lines.push(`- ${e.name} (${e.role}, ${e.companyId === 'agency' ? 'Agency' : 'Ốp tường'})`);
   }
 
@@ -364,15 +371,18 @@ function formatVN(dateStr) {
   return `${dow}, ${d}/${m}/${y}`;
 }
 
-function buildDailyReport(data, today) {
+function buildDailyReport(data, today, scope = 'all') {
   const tomorrow = addDaysISO(today, 1);
   const empName = (id) => data.employees.find((e) => e.id === id)?.name || id;
   const cut = (t, n = 80) => (t && t.length > n ? t.slice(0, n - 1) + '…' : t || '');
-  const out = [`📋 BÁO CÁO LỊCH NGÀY MAI - ${formatVN(tomorrow)}`, ''];
+  const showOp = scope === 'all' || scope === 'op';
+  const showAg = scope === 'all' || scope === 'agency';
+  const title = scope === 'op' ? ' (ỐP TƯỜNG)' : scope === 'agency' ? ' (AGENCY)' : '';
+  const out = [`📋 BÁO CÁO LỊCH NGÀY MAI${title} - ${formatVN(tomorrow)}`, ''];
 
-  out.push('🪵 KHỐI ỐP TƯỜNG');
-  const activeSites = data.sites.filter((x) => x.status !== 'completed');
-  if (activeSites.length === 0) out.push('• Hiện không có công trình đang chạy.');
+  if (showOp) out.push('🪵 KHỐI ỐP TƯỜNG');
+  const activeSites = showOp ? data.sites.filter((x) => x.status !== 'completed') : [];
+  if (showOp && activeSites.length === 0) out.push('• Hiện không có công trình đang chạy.');
   for (const site of activeSites) {
     const pct = site.totalAreaM2 ? Math.round((site.completedAreaM2 / site.totalAreaM2) * 100) : 0;
     out.push(`• ${site.name}${site.address ? ' (' + site.address + ')' : ''}`);
@@ -385,8 +395,9 @@ function buildDailyReport(data, today) {
     }
   }
 
-  out.push('', '🎬 KHỐI AGENCY');
-  const pending = data.calendar.filter((c) => !c.isCompleted);
+  if (showOp && showAg) out.push('');
+  if (showAg) out.push('🎬 KHỐI AGENCY');
+  const pending = showAg ? data.calendar.filter((c) => !c.isCompleted) : [];
   const shoots = pending.filter((c) => c.shootDate === tomorrow);
   const dues = pending.filter((c) => c.editDeadline === tomorrow && c.shootDate !== tomorrow);
   const people = (c) =>
@@ -394,12 +405,12 @@ function buildDailyReport(data, today) {
       .filter(Boolean).join(' | ');
   for (const c of shoots) out.push(`• 🎥 Quay: ${cut(c.title)} [${c.client}]${people(c) ? ' - ' + people(c) : ''}`);
   for (const c of dues) out.push(`• ✂️ Hạn nộp/đăng: ${cut(c.title)} [${c.client}]${people(c) ? ' - ' + people(c) : ''}`);
-  const tasksDue = data.tasks.filter((t) => t.status !== 'done' && t.deadline === tomorrow);
+  const tasksDue = showAg ? data.tasks.filter((t) => t.status !== 'done' && t.deadline === tomorrow) : [];
   for (const t of tasksDue) out.push(`• 📌 Task hạn mai: ${cut(t.title)} [${t.client}]${t.assignedTo ? ' - ' + empName(t.assignedTo) : ''}`);
-  if (shoots.length + dues.length + tasksDue.length === 0) out.push('• Không có lịch quay, hạn nộp hay task đến hạn vào ngày mai.');
+  if (showAg && shoots.length + dues.length + tasksDue.length === 0) out.push('• Không có lịch quay, hạn nộp hay task đến hạn vào ngày mai.');
 
   const overdue = pending.filter((c) => c.editDeadline && c.editDeadline < today).length;
-  const overdueTasks = data.tasks.filter((t) => t.status !== 'done' && t.deadline && t.deadline < today).length;
+  const overdueTasks = showAg ? data.tasks.filter((t) => t.status !== 'done' && t.deadline && t.deadline < today).length : 0;
   if (overdue + overdueTasks > 0) {
     out.push('', `⚠️ Đang trễ hạn: ${overdue} mục lịch content, ${overdueTasks} task.`);
   }
@@ -414,20 +425,31 @@ async function sendScheduledReport(config) {
     console.error('⚠️ Bỏ qua báo cáo lịch: không đọc được dữ liệu Supabase.');
     return false;
   }
-  const { date } = vnNowParts();
-  const body = buildDailyReport(data, date);
-  const mentionAll = !config || config.mentionAll !== false;
-  const target = config && /^\d+$/.test(String(config.groupNameOrId || '').trim()) ? String(config.groupNameOrId).trim() : activeGroupId;
   if (!zaloApi || typeof zaloApi.sendMessage !== 'function') return false;
-  try {
-    const content = mentionAll ? { msg: '@all ' + body, mentions: [{ uid: '-1', pos: 0, len: 4 }] } : { msg: body };
-    await zaloApi.sendMessage(content, target, ThreadTypeEnum.Group);
-    console.log(`📅 Đã gửi báo cáo lịch ngày mai tới nhóm ${target}${mentionAll ? ' (tag @all)' : ''}`);
-    return true;
-  } catch (e) {
-    console.error('❌ Lỗi gửi báo cáo lịch:', e.message);
-    return false;
+  const { date } = vnNowParts();
+  const mentionAll = !config || config.mentionAll !== false;
+  const isId = (v) => /^\d+$/.test(String(v || '').trim());
+  const targets = [];
+  if (isId(config && config.groupOpTuongId)) targets.push({ id: String(config.groupOpTuongId).trim(), scope: 'op' });
+  if (isId(config && config.groupAgencyId)) targets.push({ id: String(config.groupAgencyId).trim(), scope: 'agency' });
+  if (targets.length === 0) {
+    // Chưa cấu hình 2 nhóm riêng: gửi 1 báo cáo chung vào nhóm mặc định như cũ.
+    const legacy = config && isId(config.groupNameOrId) ? String(config.groupNameOrId).trim() : activeGroupId;
+    targets.push({ id: legacy, scope: 'all' });
   }
+  let allOk = true;
+  for (const t of targets) {
+    try {
+      const body = buildDailyReport(data, date, t.scope);
+      const content = mentionAll ? { msg: '@all ' + body, mentions: [{ uid: '-1', pos: 0, len: 4 }] } : { msg: body };
+      await zaloApi.sendMessage(content, t.id, ThreadTypeEnum.Group);
+      console.log(`📅 Đã gửi báo cáo lịch ngày mai (${t.scope}) tới nhóm ${t.id}${mentionAll ? ' (tag @all)' : ''}`);
+    } catch (e) {
+      allOk = false;
+      console.error(`❌ Lỗi gửi báo cáo lịch tới nhóm ${t.id}:`, e.message);
+    }
+  }
+  return allOk;
 }
 
 function loadScheduleState() {
@@ -471,7 +493,17 @@ setInterval(scheduleTick, 30000);
 /**
  * Gọi Model Gemini 3.8
  */
-async function askGeminiAI(userMessage, threadId, senderName = 'Sếp') {
+async function scopeForThread(threadId) {
+  try {
+    const data = await fetchAppData();
+    const c = (data && data.zalo_config[0]) || {};
+    if (String(c.groupOpTuongId || '') === String(threadId)) return 'op';
+    if (String(c.groupAgencyId || '') === String(threadId)) return 'agency';
+  } catch {}
+  return 'all';
+}
+
+async function askGeminiAI(userMessage, threadId, senderName = 'Sếp', scope = 'all') {
   if (!aiConfig.apiKey || !aiConfig.apiKey.trim()) {
     if (/tạo.*(dự án|ốp tường|công trình|nano|lam sóng)/i.test(userMessage)) {
       const p = parseProjectCommand(userMessage);
@@ -488,7 +520,7 @@ async function askGeminiAI(userMessage, threadId, senderName = 'Sếp') {
     }
 
     if (/(?:xem|kiểm tra|báo cáo|cho xem)?\s*tiến\s*độ/i.test(userMessage) || /làm\s*(?:đến đâu|xong chưa)/i.test(userMessage)) {
-      const ctx = await getSystemContext();
+      const ctx = await getSystemContext(scope);
       return `📊 [BÁO CÁO TIẾN ĐỘ TỪ DỮ LIỆU THẬT CỦA HỆ THỐNG]
 
 ${ctx}`;
@@ -530,7 +562,7 @@ Tính cách:
 ${actionNote ? `\nLƯU Ý QUAN TRỌNG: ${actionNote}. Hãy thông báo xác nhận đầy đủ và chúc mừng Sếp!` : ''}
 
 [NGỮ CẢNH DỮ LIỆU HIỆN TẠI]:
-${await getSystemContext()}
+${await getSystemContext(scope)}
 
 QUY TẮC BẮT BUỘC: Chỉ dùng số liệu, tên công trình, tên nhân sự có trong NGỮ CẢNH ở trên. TUYỆT ĐỐI không bịa thêm công trình, khối lượng m², tên người hay lịch. Nếu thông tin không có trong ngữ cảnh thì nói rõ là hệ thống chưa có dữ liệu đó.`;
 
@@ -666,7 +698,7 @@ async function initZaloConnection() {
             }
 
             const cleanContent = rawContent.replace(/@\S+/g, '').trim() || rawContent;
-            const aiReply = await askGeminiAI(cleanContent, threadId, isGroup ? 'Sếp và cả nhóm' : 'Sếp');
+            const aiReply = await askGeminiAI(cleanContent, threadId, isGroup ? 'Sếp và cả nhóm' : 'Sếp', isGroup ? await scopeForThread(threadId) : 'all');
 
             await sendMessageToZalo(threadId, aiReply, isGroup ? ThreadTypeEnum.Group : ThreadTypeEnum.User);
           } catch (mErr) {
@@ -861,6 +893,38 @@ const server = http.createServer((req, res) => {
       zaloConnected: !!zaloApi,
       qr: loginStatus === 'WAITING_QR' && !zaloApi ? currentQrBase64 : null,
     }));
+    return;
+  }
+
+  // 4d. Danh sách nhóm Zalo mà bot đang tham gia (để chọn trên Web App)
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/zalo/groups') {
+    (async () => {
+      let status = 200;
+      let body = { groups: [] };
+      if (!zaloApi) {
+        status = 409;
+        body = { groups: [], message: 'Bot chưa đăng nhập Zalo.' };
+      } else {
+        try {
+          const all = await zaloApi.getAllGroups();
+          const ids = Object.keys((all && all.gridVerMap) || {});
+          const groups = [];
+          for (let i = 0; i < ids.length; i += 50) {
+            const info = await zaloApi.getGroupInfo(ids.slice(i, i + 50));
+            for (const [gid, g] of Object.entries((info && info.gridInfoMap) || {})) {
+              groups.push({ id: String(gid), name: g.name || String(gid) });
+            }
+          }
+          groups.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+          body = { groups };
+        } catch (e) {
+          status = 500;
+          body = { groups: [], message: 'Không lấy được danh sách nhóm: ' + e.message };
+        }
+      }
+      res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(body));
+    })();
     return;
   }
 

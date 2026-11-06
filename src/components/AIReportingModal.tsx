@@ -28,6 +28,8 @@ import {
   copyAndOpenZalo,
   testZaloWebhookConnection,
   sendReportNow,
+  fetchZaloGroups,
+  ZaloGroupItem,
 } from '../services/zaloService';
 import {
   getStoredOmniRouterConfig,
@@ -111,6 +113,16 @@ export const AIReportingModal: React.FC<AIReportingModalProps> = ({
   const [zaloConfig, setZaloConfig] = useState<ZaloConfig>(getStoredZaloConfig);
   const [showZaloLogin, setShowZaloLogin] = useState(false);
   const [isSendingReportNow, setIsSendingReportNow] = useState(false);
+  const [groupList, setGroupList] = useState<ZaloGroupItem[]>([]);
+  const [groupListNote, setGroupListNote] = useState('');
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const loadGroupList = async () => {
+    setIsLoadingGroups(true);
+    const r = await fetchZaloGroups(zaloConfig.webhookUrlGroup);
+    setGroupList(r.groups || []);
+    setGroupListNote(r.message || ((r.groups || []).length === 0 ? 'Bot chưa thấy nhóm nào.' : ''));
+    setIsLoadingGroups(false);
+  };
   const [reportNowNotice, setReportNowNotice] = useState<{ ok: boolean; msg: string } | null>(null);
   const [omniConfig, setOmniConfig] = useState(getStoredOmniRouterConfig);
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
@@ -1467,6 +1479,49 @@ ${r.strategicRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
                   />
                   Tag @all khi bot nhắn vào nhóm
                 </label>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-slate-700">Nhóm Zalo nhận báo cáo</div>
+                    <button
+                      type="button"
+                      onClick={loadGroupList}
+                      disabled={isLoadingGroups}
+                      className="text-[11px] font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg px-2 py-1 disabled:opacity-50"
+                    >
+                      {isLoadingGroups ? 'Đang tải...' : 'Tải danh sách nhóm'}
+                    </button>
+                  </div>
+                  {([
+                    { key: 'groupOpTuongId', label: 'Nhóm Ốp Tường' },
+                    { key: 'groupAgencyId', label: 'Nhóm Agency' },
+                  ] as const).map((g) => {
+                    const value = (zaloConfig as any)[g.key] || '';
+                    const known = groupList.some((x) => x.id === value);
+                    return (
+                      <label key={g.key} className="flex items-center gap-2 text-xs text-slate-700">
+                        <span className="w-28 font-bold shrink-0">{g.label}</span>
+                        <select
+                          value={value}
+                          onChange={(e) => setZaloConfig({ ...zaloConfig, [g.key]: e.target.value })}
+                          className="flex-1 px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs"
+                        >
+                          <option value="">(Chưa chọn)</option>
+                          {value && !known && <option value={value}>ID: {value}</option>}
+                          {groupList.map((x) => (
+                            <option key={x.id} value={x.id}>
+                              {x.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  })}
+                  {groupListNote && <p className="text-[11px] text-rose-600">{groupListNote}</p>}
+                  <p className="text-[11px] text-slate-500">
+                    Mỗi nhóm chỉ nhận báo cáo và được bot trả lời về đúng khối của mình. Chưa chọn nhóm nào thì bot gửi một báo cáo chung vào nhóm mặc định.
+                  </p>
+                </div>
 
                 <div className="space-y-2">
                   <div className="text-xs font-bold text-slate-700">Giờ bot báo cáo mỗi ngày</div>
