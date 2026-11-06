@@ -1,6 +1,6 @@
 import React from 'react';
 import { CompanyId } from '../types';
-import { Building2, Hammer, Cloud, Sparkles, Bot, ShieldCheck, Lock, LogOut } from 'lucide-react';
+import { Building2, Hammer, Cloud, Sparkles, Bot, ShieldCheck, Lock, LogOut, KeyRound } from 'lucide-react';
 
 interface HeaderProps {
   currentCompany: CompanyId;
@@ -66,9 +66,10 @@ export const Header: React.FC<HeaderProps> = ({
             {isAdmin ? (
               <div className="flex items-center gap-1 bg-amber-50 border border-amber-300 py-1 px-2 sm:px-2.5 rounded-xl shadow-xs">
                 <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 shrink-0" />
-                <span className="text-[11px] sm:text-xs font-black text-amber-900 hidden sm:inline">
-                  👑 Admin
-                </span>
+                <button type="button" onClick={onOpenAdminLogin} className="text-[11px] sm:text-xs font-black text-amber-900 hover:text-amber-700 transition flex items-center gap-1 cursor-pointer" title="Bấm để Đổi Mật Khẩu Admin">
+                  <span>👑 Admin</span>
+                  <KeyRound className="w-3 h-3 text-amber-600 opacity-80" />
+                </button>
                 <button
                   type="button"
                   onClick={onAdminLogout}

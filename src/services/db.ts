@@ -432,6 +432,10 @@ export async function pullRemote(): Promise<RemoteData | null> {
       result.seeded = true;
       continue;
     }
+    if (row.collection === 'meta' && row.id === 'admin_auth' && row.data?.password) {
+      localStorage.setItem('app_admin_password', row.data.password);
+      continue;
+    }
     const c = row.collection as SyncCollection;
     if (!Array.isArray(result[c])) continue;
     result[c].push(row.data);

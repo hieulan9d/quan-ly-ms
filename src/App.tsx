@@ -647,8 +647,10 @@ export function App() {
 
       <AdminLoginModal
         isOpen={isAdminModalOpen}
+        isAdmin={isAdmin}
         onClose={() => setIsAdminModalOpen(false)}
         onLoginSuccess={handleAdminLoginSuccess}
+        onLogout={handleAdminLogout}
       />
     </AuraBackground>
   );
