@@ -46,6 +46,16 @@ export async function fetchZaloBotStatus(baseUrl?: string): Promise<ZaloBotStatu
   return res.json();
 }
 
+export async function sendReportNow(baseUrl?: string): Promise<{ ok: boolean; message: string }> {
+  const base = resolveBotUrl(baseUrl || 'http://localhost:5005').replace(/\/(webhook|api)\/.*$/, '').replace(/\/$/, '');
+  try {
+    const res = await fetch(base + '/api/zalo/report-now', { method: 'POST' });
+    return await res.json();
+  } catch (e: any) {
+    return { ok: false, message: 'Không kết nối được máy chủ bot (' + (e?.message || 'lỗi mạng') + ').' };
+  }
+}
+
 /**
  * Gửi tin nhắn qua Webhook Zalo (n8n, Make, Custom Bot Server, Zalo OpenAPI)
  */

@@ -150,6 +150,8 @@ export const DEFAULT_ZALO_CONFIG: ZaloConfig = {
   groupNameOrId: '2576265856283387966',
   autoScheduleAlert: true,
   alertHour: '08:00',
+  alertTimes: ['08:00', '20:00'],
+  mentionAll: true,
 };
 
 export function getStoredZaloConfig(): ZaloConfig {

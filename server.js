@@ -242,7 +242,7 @@ async function fetchAppData() {
       return null;
     }
     const rows = await res.json();
-    const data = { employees: [], sites: [], tasks: [], calendar: [], projects: [], attendance: [] };
+    const data = { employees: [], sites: [], tasks: [], calendar: [], projects: [], attendance: [], zalo_config: [] };
     for (const r of rows) {
       if (data[r.collection]) data[r.collection].push(r.data);
     }
@@ -335,6 +335,138 @@ async function getSystemContext() {
 
   return lines.join('\n');
 }
+
+// ----------------- BÁO CÁO LỊCH TỰ ĐỘNG (QUÉT LỊCH, TAG @all) -----------------
+const SCHEDULE_STATE_PATH = path.join(SCRIPTS_DIR, 'zalo-schedule-state.json');
+const DEFAULT_ALERT_TIMES = ['08:00', '20:00'];
+let lastManualReportAt = 0;
+
+function vnNowParts() {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const g = (t) => parts.find((x) => x.type === t).value;
+  const hour = g('hour') === '24' ? '00' : g('hour');
+  return { date: `${g('year')}-${g('month')}-${g('day')}`, time: `${hour}:${g('minute')}` };
+}
+
+function addDaysISO(dateStr, n) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.toISOString().slice(0, 10);
+}
+
+function formatVN(dateStr) {
+  const [y, m, d] = dateStr.split('-');
+  const dow = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][new Date(Date.UTC(+y, +m - 1, +d)).getUTCDay()];
+  return `${dow}, ${d}/${m}/${y}`;
+}
+
+function buildDailyReport(data, today) {
+  const tomorrow = addDaysISO(today, 1);
+  const empName = (id) => data.employees.find((e) => e.id === id)?.name || id;
+  const cut = (t, n = 80) => (t && t.length > n ? t.slice(0, n - 1) + '…' : t || '');
+  const out = [`📋 BÁO CÁO LỊCH NGÀY MAI - ${formatVN(tomorrow)}`, ''];
+
+  out.push('🪵 KHỐI ỐP TƯỜNG');
+  const activeSites = data.sites.filter((x) => x.status !== 'completed');
+  if (activeSites.length === 0) out.push('• Hiện không có công trình đang chạy.');
+  for (const site of activeSites) {
+    const pct = site.totalAreaM2 ? Math.round((site.completedAreaM2 / site.totalAreaM2) * 100) : 0;
+    out.push(`• ${site.name}${site.address ? ' (' + site.address + ')' : ''}`);
+    out.push(`   Tiến độ: ${site.completedAreaM2}/${site.totalAreaM2} m² (${pct}%), ngày ${site.actualDays}/${site.estimatedDays}`);
+    const sch = (site.dailySchedules || []).filter((x) => x.date === tomorrow);
+    if (sch.length === 0) out.push('   Lịch mai: chưa có lịch thợ.');
+    for (const x of sch) {
+      const who = (x.workerIds || []).map(empName).join(', ') || 'chưa gán thợ';
+      out.push(`   Lịch mai: ${x.workHours || ''} - ${x.taskDescription || ''} - ${who}`);
+    }
+  }
+
+  out.push('', '🎬 KHỐI AGENCY');
+  const pending = data.calendar.filter((c) => !c.isCompleted);
+  const shoots = pending.filter((c) => c.shootDate === tomorrow);
+  const dues = pending.filter((c) => c.editDeadline === tomorrow && c.shootDate !== tomorrow);
+  const people = (c) =>
+    [c.writerId && 'Content: ' + empName(c.writerId), c.shooterId && 'Quay: ' + empName(c.shooterId), c.editorId && 'Edit: ' + empName(c.editorId)]
+      .filter(Boolean).join(' | ');
+  for (const c of shoots) out.push(`• 🎥 Quay: ${cut(c.title)} [${c.client}]${people(c) ? ' - ' + people(c) : ''}`);
+  for (const c of dues) out.push(`• ✂️ Hạn nộp/đăng: ${cut(c.title)} [${c.client}]${people(c) ? ' - ' + people(c) : ''}`);
+  const tasksDue = data.tasks.filter((t) => t.status !== 'done' && t.deadline === tomorrow);
+  for (const t of tasksDue) out.push(`• 📌 Task hạn mai: ${cut(t.title)} [${t.client}]${t.assignedTo ? ' - ' + empName(t.assignedTo) : ''}`);
+  if (shoots.length + dues.length + tasksDue.length === 0) out.push('• Không có lịch quay, hạn nộp hay task đến hạn vào ngày mai.');
+
+  const overdue = pending.filter((c) => c.editDeadline && c.editDeadline < today).length;
+  const overdueTasks = data.tasks.filter((t) => t.status !== 'done' && t.deadline && t.deadline < today).length;
+  if (overdue + overdueTasks > 0) {
+    out.push('', `⚠️ Đang trễ hạn: ${overdue} mục lịch content, ${overdueTasks} task.`);
+  }
+  out.push('', '👉 Anh em xem chi tiết trên web và cập nhật tiến độ giúp em nhé!');
+  return out.join('\n');
+}
+
+async function sendScheduledReport(config) {
+  appDataCache.time = 0;
+  const data = await fetchAppData();
+  if (!data) {
+    console.error('⚠️ Bỏ qua báo cáo lịch: không đọc được dữ liệu Supabase.');
+    return false;
+  }
+  const { date } = vnNowParts();
+  const body = buildDailyReport(data, date);
+  const mentionAll = !config || config.mentionAll !== false;
+  const target = config && /^\d+$/.test(String(config.groupNameOrId || '').trim()) ? String(config.groupNameOrId).trim() : activeGroupId;
+  if (!zaloApi || typeof zaloApi.sendMessage !== 'function') return false;
+  try {
+    const content = mentionAll ? { msg: '@all ' + body, mentions: [{ uid: '-1', pos: 0, len: 4 }] } : { msg: body };
+    await zaloApi.sendMessage(content, target, ThreadTypeEnum.Group);
+    console.log(`📅 Đã gửi báo cáo lịch ngày mai tới nhóm ${target}${mentionAll ? ' (tag @all)' : ''}`);
+    return true;
+  } catch (e) {
+    console.error('❌ Lỗi gửi báo cáo lịch:', e.message);
+    return false;
+  }
+}
+
+function loadScheduleState() {
+  try {
+    return JSON.parse(fs.readFileSync(SCHEDULE_STATE_PATH, 'utf-8'));
+  } catch {
+    return { sent: [] };
+  }
+}
+
+async function scheduleTick() {
+  try {
+    if (!zaloApi) return;
+    const data = await fetchAppData();
+    if (!data) return;
+    const config = data.zalo_config[0] || {};
+    if (config.autoScheduleAlert === false) return;
+    const times = Array.isArray(config.alertTimes) && config.alertTimes.length > 0 ? config.alertTimes : DEFAULT_ALERT_TIMES;
+    const { date, time } = vnNowParts();
+    const nowMin = parseInt(time.slice(0, 2), 10) * 60 + parseInt(time.slice(3), 10);
+    const state = loadScheduleState();
+    state.sent = (state.sent || []).filter((k) => k.slice(0, 10) >= addDaysISO(date, -2));
+    for (const t of times) {
+      if (!/^\d{2}:\d{2}$/.test(t)) continue;
+      const tMin = parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3), 10);
+      const key = `${date} ${t}`;
+      // Chỉ gửi trong vòng 15 phút kể từ giờ hẹn, và mỗi mốc chỉ gửi 1 lần/ngày.
+      if (nowMin >= tMin && nowMin < tMin + 15 && !state.sent.includes(key)) {
+        state.sent.push(key);
+        fs.writeFileSync(SCHEDULE_STATE_PATH, JSON.stringify(state, null, 2), 'utf-8');
+        await sendScheduledReport(config);
+      }
+    }
+  } catch (e) {
+    console.error('Lỗi bộ hẹn giờ báo cáo:', e.message);
+  }
+}
+
+setInterval(scheduleTick, 30000);
 
 /**
  * Gọi Model Gemini 3.8
@@ -723,6 +855,30 @@ const server = http.createServer((req, res) => {
       zaloConnected: !!zaloApi,
       qr: loginStatus === 'WAITING_QR' && !zaloApi ? currentQrBase64 : null,
     }));
+    return;
+  }
+
+  // 4c. Gửi báo cáo lịch ngay (nút "Gửi thử" trên Web App)
+  if (req.method === 'POST' && req.url.split('?')[0] === '/api/zalo/report-now') {
+    (async () => {
+      let status = 200;
+      let result = { ok: false, message: '' };
+      if (!zaloApi) {
+        status = 409;
+        result.message = 'Bot chưa đăng nhập Zalo.';
+      } else if (Date.now() - lastManualReportAt < 30000) {
+        status = 429;
+        result.message = 'Vừa gửi xong, vui lòng đợi 30 giây.';
+      } else {
+        lastManualReportAt = Date.now();
+        const data = await fetchAppData();
+        const ok = await sendScheduledReport((data && data.zalo_config[0]) || {});
+        result = { ok, message: ok ? 'Đã gửi báo cáo lên nhóm Zalo.' : 'Gửi thất bại, xem log máy chủ.' };
+        if (!ok) status = 500;
+      }
+      res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    })();
     return;
   }
 

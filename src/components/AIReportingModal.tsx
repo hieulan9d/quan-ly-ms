@@ -27,6 +27,7 @@ import {
   sendZaloWebhook,
   copyAndOpenZalo,
   testZaloWebhookConnection,
+  sendReportNow,
 } from '../services/zaloService';
 import {
   getStoredOmniRouterConfig,
@@ -109,6 +110,8 @@ export const AIReportingModal: React.FC<AIReportingModalProps> = ({
   // Zalo & AI Config States
   const [zaloConfig, setZaloConfig] = useState<ZaloConfig>(getStoredZaloConfig);
   const [showZaloLogin, setShowZaloLogin] = useState(false);
+  const [isSendingReportNow, setIsSendingReportNow] = useState(false);
+  const [reportNowNotice, setReportNowNotice] = useState<{ ok: boolean; msg: string } | null>(null);
   const [omniConfig, setOmniConfig] = useState(getStoredOmniRouterConfig);
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [saveNotice, setSaveNotice] = useState<string>('');
@@ -1441,6 +1444,94 @@ ${r.strategicRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
                     <span>{testModelResult.message} ({testModelResult.latencyMs}ms)</span>
                   </div>
                 )}
+              </div>
+
+              {/* Báo cáo lịch tự động của bot */}
+              <div className="space-y-3 p-4 rounded-2xl border border-emerald-200 bg-emerald-50/50">
+                <h4 className="text-sm font-black text-slate-900">Bot tự quét lịch &amp; báo cáo ngày hôm sau</h4>
+
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={zaloConfig.autoScheduleAlert}
+                    onChange={(e) => setZaloConfig({ ...zaloConfig, autoScheduleAlert: e.target.checked })}
+                  />
+                  Bật báo cáo tự động
+                </label>
+
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={zaloConfig.mentionAll !== false}
+                    onChange={(e) => setZaloConfig({ ...zaloConfig, mentionAll: e.target.checked })}
+                  />
+                  Tag @all khi bot nhắn vào nhóm
+                </label>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-bold text-slate-700">Giờ bot báo cáo mỗi ngày</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(zaloConfig.alertTimes && zaloConfig.alertTimes.length > 0 ? zaloConfig.alertTimes : ['08:00', '20:00']).map((t, idx, arr) => (
+                      <div key={idx} className="flex items-center gap-1">
+                        <input
+                          type="time"
+                          value={t}
+                          onChange={(e) => {
+                            const next = [...arr];
+                            next[idx] = e.target.value;
+                            setZaloConfig({ ...zaloConfig, alertTimes: next });
+                          }}
+                          className="px-2 py-1.5 rounded-lg border border-slate-300 text-sm bg-white"
+                        />
+                        {arr.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setZaloConfig({ ...zaloConfig, alertTimes: arr.filter((_, i) => i !== idx) })}
+                            className="text-slate-400 hover:text-rose-500 text-xs px-1"
+                            title="Xóa giờ này"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = zaloConfig.alertTimes && zaloConfig.alertTimes.length > 0 ? zaloConfig.alertTimes : ['08:00', '20:00'];
+                        setZaloConfig({ ...zaloConfig, alertTimes: [...cur, '12:00'] });
+                      }}
+                      className="text-xs font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5"
+                    >
+                      + Thêm giờ
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Nhớ bấm "Lưu Tất Cả Cấu Hình". Bot đọc giờ theo múi giờ Việt Nam và báo cáo lịch ngày mai.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isSendingReportNow}
+                    onClick={async () => {
+                      setIsSendingReportNow(true);
+                      setReportNowNotice(null);
+                      const r = await sendReportNow(zaloConfig.webhookUrlGroup);
+                      setReportNowNotice({ ok: r.ok, msg: r.message });
+                      setIsSendingReportNow(false);
+                    }}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {isSendingReportNow ? 'Đang gửi...' : 'Gửi báo cáo thử ngay'}
+                  </button>
+                  {reportNowNotice && (
+                    <span className={`text-xs font-bold ${reportNowNotice.ok ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {reportNowNotice.msg}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {saveNotice && (

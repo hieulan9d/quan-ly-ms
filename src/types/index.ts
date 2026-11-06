@@ -183,6 +183,8 @@ export interface ZaloConfig {
   groupNameOrId: string;       // Tên hoặc ID Nhóm Zalo
   autoScheduleAlert: boolean;  // Tự động quét & nhắc lịch
   alertHour: string;           // Giờ nhắc mỗi ngày (VD: "08:00")
+  alertTimes?: string[];       // Các giờ bot báo cáo lịch ngày mai (VD: ["08:00", "20:00"])
+  mentionAll?: boolean;        // Tag @all khi bot nhắn báo cáo
   lastAlertDate?: string;      // Ngày gần nhất đã gửi nhắc lịch
 }
 
