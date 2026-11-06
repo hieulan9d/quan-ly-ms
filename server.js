@@ -206,33 +206,134 @@ function createProjectFromCommand(p) {
 }
 
 /**
- * Ngữ cảnh dữ liệu thực tế hệ thống MS Management cung cấp cho Gemini
+ * Đọc cấu hình Supabase (từ biến môi trường hoặc file .env) để bot lấy DỮ LIỆU THẬT của hệ thống.
  */
-function getSystemContext() {
-  const todayStr = new Date().toLocaleDateString('vi-VN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+function getSupabaseEnv() {
+  let url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  let key = process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+  if (!url || !key) {
+    try {
+      const envPath = path.join(__dirname, '.env');
+      if (fs.existsSync(envPath)) {
+        for (const line of fs.readFileSync(envPath, 'utf-8').split(/\r?\n/)) {
+          const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+          if (!m) continue;
+          if (!url && m[1] === 'VITE_SUPABASE_URL') url = m[2];
+          if (!key && m[1] === 'VITE_SUPABASE_ANON_KEY') key = m[2];
+        }
+      }
+    } catch {}
+  }
+  return { url: url.replace(/\/+$/, ''), key };
+}
 
-  return `HÔM NAY LÀ: ${todayStr}
+let appDataCache = { time: 0, data: null };
 
-DỮ LIỆU CÔNG VIỆC THỰC TẾ TRÊN HỆ THỐNG MS MANAGEMENT:
-1. KHỐI MS ỐP TƯỜNG LAM SÓNG & NANO:
-- Công trình trọng điểm: "Biệt Thự Gamuda Yên Sở"
-  + Khối lượng: 58 / 85 m² hoàn thiện (đạt 68%)
-  + Giai đoạn: Đang ốp hoàn thiện nan sóng phòng khách và nẹp phào góc
-  + Tiến độ thời gian: Đang làm ngày 3 / 5 ngày dự tính (Đúng tiến độ ✓)
-  + Đội thợ phụ trách: Trần Văn Bình (Tổ trưởng), Hoàng Văn Dũng
-  + Nhật ký công trình: Đã tải lên 4 ảnh hiện trường thi công sắc nét
-- Công trình mới khởi công: "Ốp Tường Biệt Thự Ecopark" (Ngân sách 85 triệu, 4 ngày làm việc, tổ thợ Bình & Dũng)
+async function fetchAppData() {
+  if (appDataCache.data && Date.now() - appDataCache.time < 30000) return appDataCache.data;
+  const { url, key } = getSupabaseEnv();
+  if (!url || !key) return null;
+  try {
+    const res = await fetch(`${url}/rest/v1/app_records?select=collection,id,data&limit=50000`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    });
+    if (!res.ok) {
+      console.error('Không đọc được dữ liệu Supabase cho bot: HTTP', res.status);
+      return null;
+    }
+    const rows = await res.json();
+    const data = { employees: [], sites: [], tasks: [], calendar: [], projects: [], attendance: [] };
+    for (const r of rows) {
+      if (data[r.collection]) data[r.collection].push(r.data);
+    }
+    appDataCache = { time: Date.now(), data };
+    return data;
+  } catch (e) {
+    console.error('Lỗi đọc dữ liệu Supabase cho bot:', e.message);
+    return null;
+  }
+}
 
-2. KHỐI MS AGENCY (SẢN XUẤT VIDEO & CONTENT MARKETING):
-- Dự án chính: Kế hoạch truyền thông "Feel Chicken"
-  + Video TikTok/Reels: 15 video theo kế hoạch tháng, đã quay xong 9 video, dựng hoàn tất 7 video
-  + Deadline gấp hôm nay: Cần duyệt 1 video hậu trường và đăng bài Content Fanpage
-  + Đội ngũ: Editor Tuấn Anh, Content Thu Trang, Quay phim Hoàng Nam`;
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const SITE_STATUS_LABEL = {
+  planning: 'Đang chuẩn bị',
+  framing: 'Bắn khung xương',
+  installing: 'Đang ốp',
+  finishing: 'Hoàn thiện',
+  completed: 'Đã xong',
+};
+
+/**
+ * Ngữ cảnh dữ liệu THẬT từ Supabase cung cấp cho AI
+ */
+async function getSystemContext() {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const today = isoDate(now);
+  const tomorrowD = new Date(now);
+  tomorrowD.setDate(tomorrowD.getDate() + 1);
+  const tomorrow = isoDate(tomorrowD);
+
+  const data = await fetchAppData();
+  if (!data) {
+    return `HÔM NAY LÀ: ${todayStr}\n\n(Không đọc được dữ liệu hệ thống lúc này. KHÔNG được bịa số liệu; hãy nói với Sếp là chưa lấy được dữ liệu.)`;
+  }
+
+  const empName = (id) => data.employees.find((e) => e.id === id)?.name || id;
+  const lines = [`HÔM NAY LÀ: ${todayStr} (${today})`, '', 'DỮ LIỆU THẬT TRÊN HỆ THỐNG (lấy từ ứng dụng web):'];
+
+  lines.push('', '1. KHỐI ỐP TƯỜNG - CÔNG TRÌNH:');
+  if (data.sites.length === 0) lines.push('- Hiện chưa có công trình nào.');
+  for (const site of data.sites) {
+    const pct = site.totalAreaM2 ? Math.round((site.completedAreaM2 / site.totalAreaM2) * 100) : 0;
+    lines.push(
+      `- "${site.name}" tại ${site.address || '(chưa có địa chỉ)'}, khách: ${site.clientName || '(chưa có)'}`,
+      `  + Khối lượng: ${site.completedAreaM2} / ${site.totalAreaM2} m² (${pct}%)`,
+      `  + Trạng thái: ${SITE_STATUS_LABEL[site.status] || site.status}; dự tính ${site.estimatedDays} ngày, thực tế đang làm ${site.actualDays} ngày`,
+      `  + Thợ phụ trách: ${(site.assignedWorkers || []).map(empName).join(', ') || '(chưa gán)'}`
+    );
+    for (const sch of site.dailySchedules || []) {
+      if (sch.date === today || sch.date === tomorrow) {
+        lines.push(
+          `  + Lịch ${sch.date === today ? 'hôm nay' : 'ngày mai'} (${sch.date}): ${sch.workHours || ''} - ${sch.taskDescription || ''} - thợ: ${(sch.workerIds || []).map(empName).join(', ')}`
+        );
+      }
+    }
+    if (site.notes) lines.push(`  + Ghi chú: ${site.notes}`);
+  }
+
+  lines.push('', '2. KHỐI AGENCY - CÔNG VIỆC (chưa hoàn thành):');
+  const openTasks = data.tasks.filter((t) => t.status !== 'done');
+  if (openTasks.length === 0) lines.push('- Không có task nào đang mở.');
+  for (const t of openTasks.slice(0, 25)) {
+    lines.push(`- [${t.status}] ${t.title} (khách: ${t.client}; phụ trách: ${t.assignedTo ? empName(t.assignedTo) : 'chưa gán'}; hạn: ${t.deadline || 'không có'})`);
+  }
+
+  lines.push('', '3. LỊCH CONTENT / QUAY / EDIT:');
+  const pending = data.calendar.filter((c) => !c.isCompleted);
+  const overdue = pending.filter((c) => c.editDeadline && c.editDeadline < today);
+  const upcoming = pending
+    .filter((c) => c.editDeadline && c.editDeadline >= today)
+    .sort((a, b) => a.editDeadline.localeCompare(b.editDeadline))
+    .slice(0, 15);
+  lines.push(`- Tổng ${data.calendar.length} mục, chưa xong ${pending.length}, trễ hạn ${overdue.length}.`);
+  for (const c of upcoming) {
+    lines.push(`- Hạn ${c.editDeadline}: ${c.title} (${c.loai || 'Khác'}, khách: ${c.client})`);
+  }
+
+  lines.push('', '4. NHÂN SỰ:');
+  if (data.employees.length === 0) lines.push('- Chưa có nhân sự nào.');
+  for (const e of data.employees.filter((x) => x.active !== false)) {
+    lines.push(`- ${e.name} (${e.role}, ${e.companyId === 'agency' ? 'Agency' : 'Ốp tường'})`);
+  }
+
+  return lines.join('\n');
 }
 
 /**
@@ -255,23 +356,17 @@ async function askGeminiAI(userMessage, threadId, senderName = 'Sếp') {
     }
 
     if (/(?:xem|kiểm tra|báo cáo|cho xem)?\s*tiến\s*độ/i.test(userMessage) || /làm\s*(?:đến đâu|xong chưa)/i.test(userMessage)) {
-      return (
-        `📊 [BÁO CÁO TIẾN ĐỘ THỜI GIAN THỰC CHO SẾP]\n` +
-        `🪵 Công trình: Biệt Thự Gamuda Yên Sở\n` +
-        `📈 Khối lượng hoàn thiện: 58 / 85 m² (Đạt 68% khối lượng)\n` +
-        `🏗️ Giai đoạn: Đang ốp hoàn thiện nan sóng & phào góc trang trí\n` +
-        `⏳ Thời gian: Ngày thứ 3 / 5 ngày dự tính (Đúng tiến độ ✓)\n` +
-        `👷 Đội thợ: Trần Văn Bình (Tổ trưởng), Hoàng Văn Dũng\n` +
-        `📸 Nhật ký: Đã cập nhật 4 ảnh thi công hiện trường mới nhất\n` +
-        `👉 Dữ liệu đồng bộ trực tiếp từ ứng dụng Web MS Management!`
-      );
+      const ctx = await getSystemContext();
+      return `📊 [BÁO CÁO TIẾN ĐỘ TỪ DỮ LIỆU THẬT CỦA HỆ THỐNG]
+
+${ctx}`;
     }
 
     return (
       `👋 Dạ em chào ${senderName}!\n\n` +
       `Em là Trợ Lý AI của MS Management đang trực tuyến 24/7.\n` +
       `📌 Sếp có thể nhắn cho em:\n` +
-      `1️⃣ "Xem tiến độ dự án Gamuda" -> Em báo cáo chi tiết khối lượng, thợ, tiến độ.\n` +
+      `1️⃣ "Xem tiến độ công trình" -> Em báo cáo chi tiết khối lượng, thợ, tiến độ.\n` +
       `2️⃣ "Tạo 1 dự án ốp tường mới địa chỉ Ecopark số tiền 85 triệu làm trong 4 ngày" -> Em tự lên dự án trên Web ngay!\n\n` +
       `💡 Để em trò chuyện tự nhiên và tư vấn sâu bằng model Gemini 3.8, Sếp hãy nhắn: setkey [MÃ_API_KEY] nhé!`
     );
@@ -303,7 +398,9 @@ Tính cách:
 ${actionNote ? `\nLƯU Ý QUAN TRỌNG: ${actionNote}. Hãy thông báo xác nhận đầy đủ và chúc mừng Sếp!` : ''}
 
 [NGỮ CẢNH DỮ LIỆU HIỆN TẠI]:
-${getSystemContext()}`;
+${await getSystemContext()}
+
+QUY TẮC BẮT BUỘC: Chỉ dùng số liệu, tên công trình, tên nhân sự có trong NGỮ CẢNH ở trên. TUYỆT ĐỐI không bịa thêm công trình, khối lượng m², tên người hay lịch. Nếu thông tin không có trong ngữ cảnh thì nói rõ là hệ thống chưa có dữ liệu đó.`;
 
   const history = getMemory(threadId);
 
