@@ -618,6 +618,17 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 4b. Trạng thái đăng nhập Zalo + mã QR (cho nút "Đăng nhập Zalo Bot" trên Web App)
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/zalo/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({
+      loginStatus,
+      zaloConnected: !!zaloApi,
+      qr: loginStatus === 'WAITING_QR' && !zaloApi ? currentQrBase64 : null,
+    }));
+    return;
+  }
+
   // 5. Health Check
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });

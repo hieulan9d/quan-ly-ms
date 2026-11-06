@@ -74,6 +74,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { ZaloBotLoginModal } from './ZaloBotLoginModal';
 
 interface AIReportingModalProps {
   isOpen: boolean;
@@ -107,6 +108,7 @@ export const AIReportingModal: React.FC<AIReportingModalProps> = ({
 
   // Zalo & AI Config States
   const [zaloConfig, setZaloConfig] = useState<ZaloConfig>(getStoredZaloConfig);
+  const [showZaloLogin, setShowZaloLogin] = useState(false);
   const [omniConfig, setOmniConfig] = useState(getStoredOmniRouterConfig);
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [saveNotice, setSaveNotice] = useState<string>('');
@@ -914,6 +916,13 @@ ${r.strategicRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
 
                 <div className="flex items-center gap-2 ml-auto">
                   <button
+                    type="button"
+                    onClick={() => setShowZaloLogin(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition"
+                  >
+                    <span>Đăng nhập Zalo Bot</span>
+                  </button>
+                  <button
                     onClick={async () => {
                       await copyAndOpenZalo({ message: scheduleZaloMessage, isGroup: true });
                       setScheduleNotice('✓ Đã chép tin nhắn & mở Zalo! Bạn hãy dán (Ctrl+V) vào nhóm nhé.');
@@ -1452,6 +1461,11 @@ ${r.strategicRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
           )}
         </div>
       </div>
+      <ZaloBotLoginModal
+        isOpen={showZaloLogin}
+        onClose={() => setShowZaloLogin(false)}
+        botUrl={zaloConfig.webhookUrlGroup}
+      />
     </div>
   );
 };

@@ -17,6 +17,36 @@ export interface ZaloSendResult {
 }
 
 /**
+ * Webhook mặc định trỏ về localhost:5005. Khi mở web qua domain (không phải localhost)
+ * thì localhost là máy của người xem, nên đổi sang chính domain đang mở.
+ */
+export function resolveBotUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const pageIsLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (['localhost', '127.0.0.1'].includes(u.hostname) && !pageIsLocal) {
+      return window.location.origin + u.pathname + u.search;
+    }
+  } catch {
+    // giữ nguyên
+  }
+  return url;
+}
+
+export interface ZaloBotStatus {
+  loginStatus: string;
+  zaloConnected: boolean;
+  qr: string | null;
+}
+
+export async function fetchZaloBotStatus(baseUrl?: string): Promise<ZaloBotStatus> {
+  const base = resolveBotUrl(baseUrl || 'http://localhost:5005').replace(/\/(webhook|api)\/.*$/, '').replace(/\/$/, '');
+  const res = await fetch(base + '/api/zalo/status', { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+/**
  * Gửi tin nhắn qua Webhook Zalo (n8n, Make, Custom Bot Server, Zalo OpenAPI)
  */
 export async function sendZaloWebhook(options: SendZaloOptions): Promise<ZaloSendResult> {
@@ -30,7 +60,7 @@ export async function sendZaloWebhook(options: SendZaloOptions): Promise<ZaloSen
     };
   }
 
-  const endpoint = webhookUrl.trim();
+  const endpoint = resolveBotUrl(webhookUrl.trim());
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 12000);
 
