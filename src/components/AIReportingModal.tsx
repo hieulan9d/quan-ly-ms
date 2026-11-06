@@ -101,13 +101,15 @@ export const AIReportingModal: React.FC<AIReportingModalProps> = ({
   tasks,
   attendance,
   agencyRates = DEFAULT_AGENCY_RATES,
-  initialTab = 'command',
+  initialTab = 'schedule',
   onSaveSite,
 }) => {
   if (!isOpen) return null;
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'command' | 'schedule' | 'payroll' | 'progress' | 'settings'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'command' | 'schedule' | 'payroll' | 'progress' | 'settings'>(
+    initialTab === 'command' ? 'schedule' : initialTab
+  );
 
   // Zalo & AI Config States
   const [zaloConfig, setZaloConfig] = useState<ZaloConfig>(getStoredZaloConfig);
@@ -503,21 +505,6 @@ ${r.strategicRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
 
         {/* 5 Tabs Điều Hướng */}
         <div className="flex items-center gap-1.5 sm:gap-2 pt-3 pb-2 border-b border-slate-100 overflow-x-auto shrink-0 scrollbar-none">
-          <button
-            onClick={() => setActiveTab('command')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap ${
-              activeTab === 'command'
-                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-200'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <Wand2 className="w-4 h-4" />
-            <span>💬 Giao Việc Bằng Câu Nói</span>
-            <span className="bg-amber-400 text-amber-950 text-[10px] px-1.5 py-0.2 rounded-full font-black">
-              Mới
-            </span>
-          </button>
-
           <button
             onClick={() => setActiveTab('schedule')}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap ${
