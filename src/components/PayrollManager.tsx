@@ -21,6 +21,7 @@ import {
   Minus,
   Save,
   Lock,
+  Bot,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -33,6 +34,7 @@ interface PayrollManagerProps {
   onSaveAgencyRates?: (rates: AgencyRateConfig) => void;
   isAdmin?: boolean;
   onRequireAdmin?: () => void;
+  onOpenAIAgent?: (tab?: 'schedule' | 'payroll' | 'progress' | 'settings') => void;
 }
 
 const AGENCY_TASK_COUNTS_KEY = 'app_agency_payroll_task_counts';
@@ -54,6 +56,7 @@ export const PayrollManager: React.FC<PayrollManagerProps> = ({
   onSaveAgencyRates,
   isAdmin = false,
   onRequireAdmin,
+  onOpenAIAgent,
 }) => {
   const isAgency = currentCompany === 'agency';
   const companyEmployees = employees.filter((e) => e.companyId === currentCompany && e.active);
@@ -347,7 +350,19 @@ export const PayrollManager: React.FC<PayrollManagerProps> = ({
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-md transition flex items-center justify-center gap-1.5 shrink-0"
           >
             <Download className="w-4 h-4 shrink-0" />
-            <span>Xuất Excel (.xlsx)</span>
+            <span className="hidden sm:inline">Xuất Excel (.xlsx)</span>
+            <span className="sm:hidden">Excel</span>
+          </button>
+
+          {/* Nút AI Agent Báo Cáo Lương Zalo */}
+          <button
+            onClick={() => onOpenAIAgent?.('payroll')}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-md transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95"
+            title="Mở Trợ lý AI để tự động tính lương & gửi Zalo cho Sếp duyệt"
+          >
+            <Bot className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">AI Báo Cáo Lương (Zalo)</span>
+            <span className="sm:hidden">AI Lương</span>
           </button>
         </div>
       </div>

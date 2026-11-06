@@ -7,6 +7,7 @@ import {
   ContentCalendarItem,
   AgencyProject,
   AgencyRateConfig,
+  ZaloConfig,
 } from '../types';
 import {
   INITIAL_EMPLOYEES,
@@ -30,6 +31,7 @@ const GEMINI_API_KEY = 'app_gemini_api_key';
 const OMNIROUTER_API_KEY = 'app_omnirouter_api_key';
 const OMNIROUTER_BASE_URL = 'app_omnirouter_base_url';
 const OMNIROUTER_MODEL = 'app_omnirouter_model';
+const ZALO_CONFIG_KEY = 'app_zalo_config';
 
 export const DEFAULT_OMNIROUTER_BASE_URL = 'https://api.omnirouter.ai/v1/chat/completions';
 export const DEFAULT_OMNIROUTER_MODEL = 'antigravity/gemini-3.8-flash-medium';
@@ -120,6 +122,16 @@ export function saveOmniRouterConfig(config: Partial<OmniRouterConfig>) {
   if (config.apiKey !== undefined) localStorage.setItem(OMNIROUTER_API_KEY, config.apiKey.trim());
   if (config.baseUrl !== undefined) localStorage.setItem(OMNIROUTER_BASE_URL, config.baseUrl.trim());
   if (config.model !== undefined) localStorage.setItem(OMNIROUTER_MODEL, config.model.trim());
+
+  // Tự động đồng bộ sang Bot Server Zalo nếu đang chạy trên port 5005
+  try {
+    const full = getStoredOmniRouterConfig();
+    fetch('http://localhost:5005/webhook/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(full),
+    }).catch(() => {});
+  } catch {}
 }
 
 export function getStoredGeminiApiKey(): string {
@@ -128,6 +140,43 @@ export function getStoredGeminiApiKey(): string {
 
 export function saveGeminiApiKey(key: string) {
   saveOmniRouterConfig({ apiKey: key });
+}
+
+// ---------------- ZALO CONFIG & PERSISTENCE ----------------
+export const DEFAULT_ZALO_CONFIG: ZaloConfig = {
+  webhookUrlBoss: 'http://localhost:5005/webhook/boss',
+  webhookUrlGroup: 'http://localhost:5005/webhook/group',
+  bossPhoneOrId: '',
+  groupNameOrId: '2576265856283387966',
+  autoScheduleAlert: true,
+  alertHour: '08:00',
+};
+
+export function getStoredZaloConfig(): ZaloConfig {
+  const stored = localStorage.getItem(ZALO_CONFIG_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      return { ...DEFAULT_ZALO_CONFIG, ...parsed };
+    } catch {
+      // ignore
+    }
+  }
+  return {
+    ...DEFAULT_ZALO_CONFIG,
+    webhookUrlBoss: (import.meta as any).env?.VITE_ZALO_WEBHOOK_BOSS || DEFAULT_ZALO_CONFIG.webhookUrlBoss,
+    webhookUrlGroup: (import.meta as any).env?.VITE_ZALO_WEBHOOK_GROUP || DEFAULT_ZALO_CONFIG.webhookUrlGroup,
+    bossPhoneOrId: (import.meta as any).env?.VITE_ZALO_BOSS_PHONE || '',
+    groupNameOrId: (import.meta as any).env?.VITE_ZALO_GROUP_NAME || 'Nhóm Công Ty MS (Agency & Ốp Lam Sóng)',
+  };
+}
+
+export function saveZaloConfig(config: Partial<ZaloConfig>): ZaloConfig {
+  const current = getStoredZaloConfig();
+  const updated: ZaloConfig = { ...current, ...config };
+  localStorage.setItem(ZALO_CONFIG_KEY, JSON.stringify(updated));
+  void syncCollection('zalo_config', [{ id: 'default', ...updated }]);
+  return updated;
 }
 
 export function getSupabaseClient() {
@@ -387,7 +436,7 @@ export function formatDateVN(dateStr?: string): string {
 // Mỗi phần tử của mỗi danh sách là 1 dòng: (collection, id, data JSON).
 // Không cấu hình Supabase thì tất cả hàm bên dưới không làm gì, app chạy bằng localStorage như cũ.
 
-export type SyncCollection = 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects' | 'rates';
+export type SyncCollection = 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects' | 'rates' | 'zalo_config';
 
 const COLLECTION_KEYS: Record<SyncCollection, string> = {
   employees: EMPLOYEES_KEY,
@@ -397,6 +446,7 @@ const COLLECTION_KEYS: Record<SyncCollection, string> = {
   calendar: CALENDAR_KEY,
   projects: PROJECTS_KEY,
   rates: AGENCY_RATES_KEY,
+  zalo_config: ZALO_CONFIG_KEY,
 };
 
 const syncSnapshots: Partial<Record<SyncCollection, Map<string, string>>> = {};
@@ -461,8 +511,8 @@ export async function pullRemote(): Promise<RemoteData | null> {
     console.error('Supabase pull error:', error.message);
     return null;
   }
-  const result: RemoteData = { employees: [], sites: [], tasks: [], attendance: [], calendar: [], projects: [], rates: [], seeded: false };
-  (['employees', 'sites', 'tasks', 'attendance', 'calendar', 'projects', 'rates'] as SyncCollection[]).forEach((c) => {
+  const result: RemoteData = { employees: [], sites: [], tasks: [], attendance: [], calendar: [], projects: [], rates: [], zalo_config: [], seeded: false };
+  (['employees', 'sites', 'tasks', 'attendance', 'calendar', 'projects', 'rates', 'zalo_config'] as SyncCollection[]).forEach((c) => {
     syncSnapshots[c] = new Map();
   });
   for (const row of data || []) {
@@ -488,6 +538,13 @@ export function cacheCollectionLocally(collection: SyncCollection, items: any[])
     const r = items[0];
     if (r) {
       localStorage.setItem(AGENCY_RATES_KEY, JSON.stringify({ contentRate: r.contentRate, shootRate: r.shootRate, editRate: r.editRate }));
+    }
+    return;
+  }
+  if (collection === 'zalo_config') {
+    const z = items[0];
+    if (z) {
+      localStorage.setItem(ZALO_CONFIG_KEY, JSON.stringify(z));
     }
     return;
   }

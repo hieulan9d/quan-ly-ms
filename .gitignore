@@ -25,3 +25,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Sensitive Zalo credentials & temporary files
+scripts/zalo-appstate.json
+scripts/zalo-qr.png
+scripts/ai-config.json
+!scripts/ai-config.example.json
+

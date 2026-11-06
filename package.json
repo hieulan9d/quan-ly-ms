@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "start": "node server.js",
+    "bot": "node scripts/zalo-personal-bot.mjs",
+    "start:all": "node scripts/start-full-system.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host"
   },
@@ -15,7 +18,8 @@
     "lucide-react": "^1.68.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zca-js": "^2.2.0"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

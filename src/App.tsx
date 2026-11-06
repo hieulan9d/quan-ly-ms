@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import confetti from 'canvas-confetti';
 import {
   CompanyId,
   Employee,
@@ -31,6 +32,7 @@ import {
   markSeedDone,
   markRemoteSeeded,
   saveAgencyRates,
+  getStoredOmniRouterConfig,
 } from './services/db';
 
 import { Header } from './components/Header';
@@ -73,7 +75,13 @@ export function App() {
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isIphoneGuideOpen, setIsIphoneGuideOpen] = useState(false);
   const [isAIReportModalOpen, setIsAIReportModalOpen] = useState(false);
+  const [aiReportInitialTab, setAiReportInitialTab] = useState<'command' | 'schedule' | 'payroll' | 'progress' | 'settings'>('command');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
+  const handleOpenAIAgent = (tab: 'command' | 'schedule' | 'payroll' | 'progress' | 'settings' = 'command') => {
+    setAiReportInitialTab(tab);
+    setIsAIReportModalOpen(true);
+  };
 
   // Admin Role State
   const [isAdmin, setIsAdmin] = useState<boolean>(isAdminLoggedIn);
@@ -170,6 +178,20 @@ export function App() {
     };
   }, []);
 
+  // Tự động đồng bộ cấu hình AI Gemini sang Bot Zalo port 5005
+  useEffect(() => {
+    try {
+      const cfg = getStoredOmniRouterConfig();
+      if (cfg.apiKey) {
+        fetch('http://localhost:5005/webhook/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cfg),
+        }).catch(() => {});
+      }
+    } catch {}
+  }, []);
+
   const handleSaveAgencyRates = (rates: AgencyRateConfig) => {
     setAgencyRates(rates);
     saveAgencyRates(rates);
@@ -223,6 +245,55 @@ export function App() {
     setSites(updated);
     saveSites(updated);
   };
+
+  // Lắng nghe và đồng bộ tự động 2 chiều từ Zalo Bot (port 5005)
+  useEffect(() => {
+    let isCancelled = false;
+    const pollZaloActions = async () => {
+      try {
+        const res = await fetch('http://localhost:5005/api/pending-actions');
+        if (!res.ok) return;
+        const actions = await res.json();
+        if (Array.isArray(actions) && actions.length > 0 && !isCancelled) {
+          const consumedIds: string[] = [];
+          for (const act of actions) {
+            if (act.type === 'create_site' && act.site) {
+              setSites((prev) => {
+                const siteAddress = (act.site.address || '').toLowerCase().trim();
+                const siteName = (act.site.name || '').toLowerCase().trim();
+                const exists = prev.some(
+                  (s) =>
+                    s.id === act.site.id ||
+                    (siteAddress && s.address.toLowerCase().trim() === siteAddress) ||
+                    (siteName && s.name.toLowerCase().trim() === siteName)
+                );
+                if (exists) return prev;
+                const next = [act.site, ...prev];
+                saveSites(next);
+                return next;
+              });
+              consumedIds.push(act.id);
+            }
+          }
+          if (consumedIds.length > 0) {
+            await fetch('http://localhost:5005/api/pending-actions/consume', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids: consumedIds }),
+            }).catch(() => {});
+            try { confetti({ particleCount: 60, spread: 60 }); } catch {}
+          }
+        }
+      } catch {}
+    };
+
+    pollZaloActions();
+    const interval = setInterval(pollZaloActions, 2500);
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // --- Handlers for Content Calendar (Agency) ---
   const handleSaveCalendarItem = (item: ContentCalendarItem) => {
@@ -310,7 +381,7 @@ export function App() {
         onSwitchCompany={handleSwitchCompany}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenMobileGuide={() => setIsIphoneGuideOpen(true)}
-        onOpenAIReportModal={() => setIsAIReportModalOpen(true)}
+        onOpenAIReportModal={() => handleOpenAIAgent('schedule')}
         onOpenAdminLogin={() => setIsAdminModalOpen(true)}
         onAdminLogout={handleAdminLogout}
       />
@@ -431,8 +502,10 @@ export function App() {
             attendance={attendance}
             sites={sites}
             tasks={tasks}
+            calendar={calendarItems}
             agencyRates={agencyRates}
             onNavigateTab={(tab) => setCurrentTab(tab as any)}
+            onOpenAIAgent={handleOpenAIAgent}
           />
         )}
 
@@ -518,6 +591,7 @@ export function App() {
             onSaveAgencyRates={handleSaveAgencyRates}
             isAdmin={isAdmin}
             onRequireAdmin={handleRequireAdmin}
+            onOpenAIAgent={handleOpenAIAgent}
           />
         )}
       </main>
@@ -643,6 +717,9 @@ export function App() {
         calendar={calendarItems}
         tasks={tasks}
         attendance={attendance}
+        agencyRates={agencyRates}
+        initialTab={aiReportInitialTab}
+        onSaveSite={handleSaveSite}
       />
 
       <AdminLoginModal

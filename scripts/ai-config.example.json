@@ -1,0 +1,5 @@
+{
+  "apiKey": "",
+  "baseUrl": "https://api.omnirouter.ai/v1/chat/completions",
+  "model": "antigravity/gemini-3.8-flash-medium"
+}

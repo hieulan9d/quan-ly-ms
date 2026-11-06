@@ -1,6 +1,7 @@
-import React from 'react';
-import { CompanyId, Employee, AttendanceRecord, ConstructionSite, AgencyTask, AgencyRateConfig } from '../types';
+import React, { useMemo } from 'react';
+import { CompanyId, Employee, AttendanceRecord, ConstructionSite, AgencyTask, AgencyRateConfig, ContentCalendarItem } from '../types';
 import { formatCurrency, formatDateVN, DEFAULT_AGENCY_RATES } from '../services/db';
+import { scanUpcomingSchedules } from '../services/aiAgent';
 import {
   Users,
   CheckCircle2,
@@ -11,7 +12,10 @@ import {
   MapPin,
   Calendar,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Bot,
+  Sparkles,
+  BellRing,
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -20,8 +24,10 @@ interface DashboardProps {
   attendance: AttendanceRecord[];
   sites: ConstructionSite[];
   tasks: AgencyTask[];
+  calendar?: ContentCalendarItem[];
   agencyRates?: AgencyRateConfig;
   onNavigateTab: (tab: string) => void;
+  onOpenAIAgent?: (tab?: 'schedule' | 'payroll' | 'progress' | 'settings') => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -30,11 +36,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
   attendance,
   sites,
   tasks,
+  calendar = [],
   agencyRates = DEFAULT_AGENCY_RATES,
   onNavigateTab,
+  onOpenAIAgent,
 }) => {
   const isAgency = currentCompany === 'agency';
   const companyEmployees = employees.filter((e) => e.companyId === currentCompany && e.active);
+
+  // Quét sự kiện sắp tới bằng AI Agent
+  const upcomingSchedules = useMemo(
+    () => scanUpcomingSchedules(calendar, sites, employees),
+    [calendar, sites, employees]
+  );
+  const urgentCount = upcomingSchedules.filter((s) => s.isToday || s.isOverdue).length;
 
   // Lọc chấm công hôm nay
   const todayStr = new Date().toISOString().split('T')[0];
@@ -132,6 +147,50 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* AI Agent Proactive Zalo & Schedule Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-3.5 sm:p-4 shadow-lg border border-indigo-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-purple-900/50 shrink-0">
+            <Bot className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-xs sm:text-sm text-white flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
+                Trợ Lý AI & Zalo Bot Sẵn Sàng
+              </span>
+              {urgentCount > 0 && (
+                <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse whitespace-nowrap">
+                  🔥 {urgentCount} sự kiện cần chú ý
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] sm:text-xs text-indigo-200/90 mt-0.5 truncate">
+              {urgentCount > 0
+                ? `Hôm nay có ${urgentCount} lịch thợ thi công hoặc deadline video! Bấm để AI báo nhóm Zalo.`
+                : 'Lịch làm việc đang ổn định. Bạn có thể yêu cầu AI tính lương hoặc xuất báo cáo gửi Zalo.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <button
+            onClick={() => onOpenAIAgent?.('schedule')}
+            className="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-blue-900/40 whitespace-nowrap active:scale-95"
+          >
+            <BellRing className="w-3.5 h-3.5" />
+            <span>Nhắn Nhóm Zalo</span>
+          </button>
+          <button
+            onClick={() => onOpenAIAgent?.('payroll')}
+            className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/40 whitespace-nowrap active:scale-95"
+          >
+            <DollarSign className="w-3.5 h-3.5" />
+            <span>Tự Tạo Lương</span>
+          </button>
         </div>
       </div>
 

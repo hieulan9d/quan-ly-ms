@@ -92,14 +92,15 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* NÚT AI BÁO CÁO TIẾN ĐỘ 2 CÔNG TY */}
+            {/* NÚT AI AGENT & ZALO BÁO CÁO */}
             <button
               onClick={onOpenAIReportModal}
               className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2 sm:px-3 py-1.5 rounded-xl shadow-sm transition active:scale-95 whitespace-nowrap"
-              title="Trợ lý AI xuất báo cáo tiến độ tuần / tháng cho cả 2 công ty"
+              title="Trợ lý AI Agent: Báo cáo Zalo, tự tính lương và nhắc lịch nhóm"
             >
               <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 shrink-0" />
-              <span className="hidden md:inline">Báo Cáo AI</span>
+              <span className="hidden md:inline">Trợ Lý AI & Zalo</span>
+              <span className="md:hidden">AI Zalo</span>
               <Sparkles className="w-3 h-3 text-amber-500 fill-amber-500 hidden sm:inline" />
             </button>
 

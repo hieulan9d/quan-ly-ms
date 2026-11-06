@@ -174,3 +174,65 @@ export interface PayrollSummaryItem {
   netSalary: number;
   details: AttendanceRecord[];
 }
+
+// ---------------- CẤU HÌNH ZALO & AI AGENT TỰ ĐỘNG HÓA ----------------
+export interface ZaloConfig {
+  webhookUrlBoss: string;      // Webhook Zalo gửi cho Sếp
+  webhookUrlGroup: string;     // Webhook Zalo gửi vào Nhóm Công Ty
+  bossPhoneOrId: string;       // SĐT hoặc Zalo ID của Sếp
+  groupNameOrId: string;       // Tên hoặc ID Nhóm Zalo
+  autoScheduleAlert: boolean;  // Tự động quét & nhắc lịch
+  alertHour: string;           // Giờ nhắc mỗi ngày (VD: "08:00")
+  lastAlertDate?: string;      // Ngày gần nhất đã gửi nhắc lịch
+}
+
+export type ScheduleItemCategory =
+  | 'agency_shoot'
+  | 'agency_deadline'
+  | 'lam_song_schedule'
+  | 'lam_song_deadline';
+
+export interface AIAgentScheduleItem {
+  id: string;
+  category: ScheduleItemCategory;
+  title: string;
+  clientOrSite: string;
+  assignees: string[];
+  dateTime: string;
+  timeStr?: string;
+  status: string;
+  isUrgent: boolean;
+  isToday: boolean;
+  isTomorrow: boolean;
+  isOverdue: boolean;
+  notes?: string;
+}
+
+export interface AIPayrollReportResult {
+  month: string;
+  generatedAt: string;
+  totalEmployees: number;
+  totalPayroll: number;
+  agencyPayroll: number;
+  lamSongPayroll: number;
+  totalWorkUnits: number;
+  totalOtHours: number;
+  totalVideosProduced: number;
+  totalContentPieces: number;
+  totalShootSessions: number;
+  totalM2Finished: number;
+  topEarners: { name: string; role: string; salary: number; company: string }[];
+  employeeDetails: {
+    id: string;
+    name: string;
+    role: string;
+    companyId: CompanyId;
+    wageType: WageType;
+    workUnitsOrTasks: string;
+    otHours: number;
+    netSalary: number;
+  }[];
+  aiAssessment: string;
+  budgetComparison: string;
+  recommendations: string[];
+}
