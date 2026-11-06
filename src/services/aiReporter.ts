@@ -5,13 +5,14 @@ import {
   AttendanceRecord,
   ContentCalendarItem,
 } from '../types';
-import { getStoredGeminiApiKey, formatCurrency, formatDateVN } from './db';
+import { getStoredOmniRouterConfig, formatCurrency, formatDateVN } from './db';
 
 export interface AIReportResult {
   title: string;
   generatedAt: string;
   period: 'weekly' | 'monthly';
   executiveSummary: string;
+  modelUsed?: string;
   agencySection: {
     completionRate: string;
     videosShot: number;
@@ -44,7 +45,7 @@ export async function generateAIReport(
   tasks: AgencyTask[],
   attendance: AttendanceRecord[]
 ): Promise<AIReportResult> {
-  const geminiApiKey = getStoredGeminiApiKey();
+  const omniConfig = getStoredOmniRouterConfig();
 
   // 1. Phân tích số liệu Agency
   const totalCalendar = calendar.length;
@@ -96,68 +97,158 @@ export async function generateAIReport(
     return sum + emp.baseRate + emp.allowance;
   }, 0);
 
-  // Nếu có Gemini API Key, thử gọi model Gemini 1.5 / 2.0 Flash
-  if (geminiApiKey) {
+  // 4. Nếu có API Key OmniRouter, gọi model antigravity/gemini-3.8-flash-medium
+  if (omniConfig.apiKey) {
     try {
-      const prompt = `
-Bạn là Giám đốc Vận hành (COO) cấp cao chuyên quản lý chuỗi doanh nghiệp gồm:
-1. Công ty Agency Sáng tạo & Media
-2. Công ty Thi công Nội thất Ốp tường Lam Sóng.
+      const activeModel = omniConfig.model.trim() || 'antigravity/gemini-3.8-flash-medium';
+      let endpoint = omniConfig.baseUrl.trim();
+      if (!endpoint.endsWith('/chat/completions') && !endpoint.includes('generateContent')) {
+        endpoint = endpoint.replace(/\/+$/, '') + '/chat/completions';
+      }
 
-Dựa vào dữ liệu thực tế:
-- Agency: Có ${totalCalendar} video theo kế hoạch, đã quay ${videosShot}, đã edit xong ${videosEdited}. Có ${overdueVideos.length} việc trễ hạn: ${overdueList.join('; ')}.
-- Ốp Lam Sóng: Tổng diện tích ${totalM2Finished}/${totalM2Planned} m², hoàn thành ${completedSites.length} công trình, đang chạy ${activeSites.length} công trình. Tổng công thợ đã tiêu hao: ${workerManDays} công.
-- Dự kiến quỹ lương 2 bên: ${totalPayroll} VNĐ.
+      const systemPrompt = `Bạn là Giám đốc Vận hành (COO) và Cố vấn Chiến lược cấp cao cho hệ thống 2 doanh nghiệp:
+1. MS Agency: Sáng tạo nội dung, sản xuất video TikTok/Reels/YouTube cho khách hàng.
+2. MS Ốp Tường: Thi công nội thất tấm ốp nhựa lam sóng & Nano cao cấp.
 
-Hãy viết một bản tóm tắt chiến lược chuyên nghiệp (3-4 câu) và 3 kiến nghị hành động cụ thể cho ban giám đốc.
-`;
+Nhiệm vụ: Phân tích số liệu thực tế được cung cấp, đưa ra báo cáo tổng kết khách quan, sắc bén, phát hiện điểm tắc nghẽn (bottleneck) và đưa ra 3-4 lời khuyên hành động thực tế cho Ban Giám Đốc.
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
-        }
-      );
+Vui lòng trả lời bằng định dạng JSON thuần túy (không kèm markdown ngoài object JSON) với cấu trúc:
+{
+  "executiveSummary": "Đoạn văn 3-4 câu đánh giá tổng thể tiến độ và hiệu suất vận hành của cả 2 khối",
+  "agencyCommentary": "Nhận xét chi tiết về tiến độ quay, dựng video và các trường hợp trễ deadline của Agency",
+  "lamSongCommentary": "Nhận xét chi tiết về khối lượng m² đã ốp, tiến độ số ngày thi công và năng suất đội thợ",
+  "strategicRecommendations": [
+    "Khuyến nghị 1 cụ thể cho Agency",
+    "Khuyến nghị 2 cụ thể cho Đội thợ ốp lam sóng",
+    "Khuyến nghị 3 về quản trị quỹ lương / tài chính"
+  ],
+  "topPerformers": ["Tên nhân sự 1", "Tên nhân sự 2"]
+}`;
+
+      const userContent = `DỮ LIỆU VẬN HÀNH THỰC TẾ (${period === 'weekly' ? 'BÁO CÁO TUẦN' : 'BÁO CÁO THÁNG'}):
+- Khối MS Agency:
+  + Tổng số video/kế hoạch: ${totalCalendar}
+  + Đã quay xong: ${videosShot}
+  + Đã dựng/edit xong: ${videosEdited}
+  + Video trễ hạn: ${overdueVideos.length} (${overdueList.length > 0 ? overdueList.join('; ') : 'Không có'})
+- Khối MS Ốp Tường:
+  + Khối lượng m²: Đã hoàn thiện ${totalM2Finished} / ${totalM2Planned} m² (${Math.round((totalM2Finished / (totalM2Planned || 1)) * 100)}%)
+  + Công trình đã bàn giao: ${completedSites.length} (${earlySitesCount} công trình về sớm, ${delayedSitesCount} công trình trễ ngày)
+  + Công trình đang triển khai: ${activeSites.length}
+  + Tổng ngày công thợ đã tiêu hao: ${workerManDays} công
+- Tài chính:
+  + Ước tính quỹ lương tháng cho cả 2 khối: ${formatCurrency(totalPayroll)}
+
+Hãy xuất dữ liệu phân tích JSON cho Ban Giám Đốc.`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${omniConfig.apiKey.trim()}`,
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://quan-ly-ms.vercel.app',
+          'X-Title': 'MS Management Platform',
+        },
+        body: JSON.stringify({
+          model: activeModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+          temperature: 0.6,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
-        const data = await response.json();
-        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (aiText) {
-          // Parse và trả kết quả với phân tích của Gemini
-          return buildReportObject(
-            period,
-            aiText.slice(0, 400),
-            videosShot,
-            videosEdited,
-            totalCalendar,
-            overdueList,
-            totalM2Finished,
-            totalM2Planned,
-            completedSites.length,
-            activeSites.length,
-            workerManDays,
-            totalPayroll
-          );
+        const json = await response.json();
+        const content = json.choices?.[0]?.message?.content || '';
+        if (content) {
+          // Bóc tách JSON từ phản hồi của model
+          let parsedData: any = null;
+          try {
+            const cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim();
+            parsedData = JSON.parse(cleaned);
+          } catch {
+            // Nếu không phải JSON, lấy toàn bộ text làm executiveSummary
+          }
+
+          if (parsedData && parsedData.executiveSummary) {
+            return {
+              title: `Báo Cáo Tiến Độ & Hiệu Suất Vận Hành ${period === 'weekly' ? 'Tuần' : 'Tháng'} (OmniRouter: ${activeModel})`,
+              generatedAt: new Date().toLocaleString('vi-VN'),
+              period,
+              executiveSummary: parsedData.executiveSummary,
+              modelUsed: activeModel,
+              agencySection: {
+                completionRate: `${totalCalendar > 0 ? Math.round((videosEdited / totalCalendar) * 100) : 100}%`,
+                videosShot,
+                videosEdited,
+                overdueTasks: overdueList,
+                topPerformers: parsedData.topPerformers || ['Nguyễn Văn An (Lead Media)', 'Lê Hoàng Nam (Editor)'],
+                commentary: parsedData.agencyCommentary || (overdueList.length > 0 ? `Cần ưu tiên đẩy nhanh tiến độ hậu kỳ edit video.` : `Kế hoạch video bám sát tiến độ content calendar.`),
+              },
+              lamSongSection: {
+                totalM2Finished,
+                totalM2Planned,
+                durationAssessment: completedSites.length > 0 ? `Tiến độ công trình kiểm soát tốt, bám sát số ngày dự tính.` : `Các công trình đang thi công ổn định.`,
+                completedSitesCount: completedSites.length,
+                activeSitesCount: activeSites.length,
+                workerManDays,
+                commentary: parsedData.lamSongCommentary || `Đội thợ duy trì khối lượng m² đạt chất lượng nghiệm thu phào chỉ.`,
+              },
+              financialSummary: {
+                estimatedPayroll: totalPayroll,
+                notes: `Dự toán quỹ lương dựa trên công nhật thợ, giờ tăng ca OT và lương cứng khối Agency.`,
+              },
+              strategicRecommendations: Array.isArray(parsedData.strategicRecommendations) && parsedData.strategicRecommendations.length > 0
+                ? parsedData.strategicRecommendations
+                : [
+                    `Agency: Phân bổ thêm người hỗ trợ khâu dựng video để giải tỏa các đầu việc trễ deadline.`,
+                    `Ốp Lam Sóng: Tiếp tục nhân rộng quy trình quản lý điểm danh 1 chạm và chụp ảnh hiện trường.`,
+                    `Quản trị: Giám sát sát sao số ngày thực tế thi công để tối ưu chi phí công nhật thợ.`,
+                  ],
+            };
+          } else if (content) {
+            return buildReportObject(
+              period,
+              content.slice(0, 500),
+              videosShot,
+              videosEdited,
+              totalCalendar,
+              overdueList,
+              totalM2Finished,
+              totalM2Planned,
+              completedSites.length,
+              activeSites.length,
+              workerManDays,
+              totalPayroll,
+              activeModel
+            );
+          }
         }
+      } else {
+        console.warn(`OmniRouter API error status: ${response.status}`, await response.text().catch(() => ''));
       }
     } catch (e) {
-      console.warn('Gemini API call skipped, using Smart AI Synthesizer:', e);
+      console.warn('Lỗi gọi OmniRouter AI, tự động chuyển sang Smart AI Synthesizer:', e);
     }
   }
 
-  // Smart AI Synthesizer (Tự động tổng hợp thông minh không cần chờ API bên ngoài)
+  // 5. Smart AI Synthesizer (Bộ máy tổng hợp thông minh tích hợp sẵn khi chưa có mạng hoặc API key)
   const executiveText =
     period === 'weekly'
-      ? `Báo cáo tuần ghi nhận hiệu suất vận hành ổn định trên cả 2 khối. Đội thi công Ốp tường Lam Sóng đạt khối lượng ${totalM2Finished}m² (${Math.round(
+      ? `Báo cáo tuần ghi nhận hiệu suất vận hành tích cực trên cả 2 khối. Đội thi công Ốp tường Lam Sóng đạt khối lượng ${totalM2Finished}m² (${Math.round(
           (totalM2Finished / (totalM2Planned || 1)) * 100
-        )}% kế hoạch), tiến độ bám sát dự tính. Khối Agency đã quay xong ${videosShot}/${totalCalendar} video, tuy nhiên khâu Edit hậu kỳ đang có ${
+        )}% kế hoạch), tiến độ bám sát dự tính ban đầu. Khối Agency đã quay xong ${videosShot}/${totalCalendar} video, tuy nhiên khâu Edit hậu kỳ đang có ${
           overdueList.length
         } video trễ deadline cần đôn đốc giải tỏa ngay.`
-      : `Tổng kết tháng: Khối Lam Sóng xuất sắc hoàn thành ${completedSites.length} công trình trọng điểm với năng suất đạt ${totalM2Finished}m² hoàn thiện. Khối Agency đã xuất xưởng ${videosEdited} video/chiến dịch marketing, chỉ số hoàn thành đạt ${Math.round(
+      : `Tổng kết tháng: Khối Lam Sóng hoàn thành xuất sắc ${completedSites.length} công trình trọng điểm với năng suất đạt ${totalM2Finished}m² hoàn thiện. Khối Agency đã xuất xưởng ${videosEdited} video/chiến dịch marketing, chỉ số hoàn thành đạt ${Math.round(
           (videosEdited / (totalCalendar || 1)) * 100
         )}%. Quỹ lương 2 công ty được kiểm soát tối ưu trong biên độ ngân sách.`;
 
@@ -189,7 +280,8 @@ function buildReportObject(
   completedSitesCount: number,
   activeSitesCount: number,
   workerManDays: number,
-  totalPayroll: number
+  totalPayroll: number,
+  modelName?: string
 ): AIReportResult {
   const completionPct = totalCalendar > 0 ? Math.round((videosEdited / totalCalendar) * 100) : 100;
 
@@ -198,6 +290,7 @@ function buildReportObject(
     generatedAt: new Date().toLocaleString('vi-VN'),
     period,
     executiveSummary: summary,
+    modelUsed: modelName || 'Smart AI Synthesizer',
     agencySection: {
       completionRate: `${completionPct}%`,
       videosShot,

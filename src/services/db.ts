@@ -27,6 +27,12 @@ const PROJECTS_KEY = 'app_agency_projects_data';
 const AGENCY_RATES_KEY = 'app_agency_shared_rates';
 const SUPABASE_CONFIG_KEY = 'app_supabase_config';
 const GEMINI_API_KEY = 'app_gemini_api_key';
+const OMNIROUTER_API_KEY = 'app_omnirouter_api_key';
+const OMNIROUTER_BASE_URL = 'app_omnirouter_base_url';
+const OMNIROUTER_MODEL = 'app_omnirouter_model';
+
+export const DEFAULT_OMNIROUTER_BASE_URL = 'https://api.omnirouter.ai/v1/chat/completions';
+export const DEFAULT_OMNIROUTER_MODEL = 'antigravity/gemini-3.8-flash-medium';
 const SEED_DONE_KEY = 'app_seed_done'; // đã khởi tạo xong: không tự nạp lại dữ liệu mẫu
 
 export const DEFAULT_AGENCY_RATES: AgencyRateConfig = {
@@ -84,12 +90,44 @@ export function saveSupabaseConfig(config: SupabaseConfig) {
   localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify(config));
 }
 
+export interface OmniRouterConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
+export function getStoredOmniRouterConfig(): OmniRouterConfig {
+  return {
+    apiKey:
+      localStorage.getItem(OMNIROUTER_API_KEY) ||
+      (import.meta as any).env?.VITE_OMNIROUTER_API_KEY ||
+      (import.meta as any).env?.VITE_AI_API_KEY ||
+      localStorage.getItem(GEMINI_API_KEY) ||
+      (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+      '',
+    baseUrl:
+      localStorage.getItem(OMNIROUTER_BASE_URL) ||
+      (import.meta as any).env?.VITE_OMNIROUTER_BASE_URL ||
+      DEFAULT_OMNIROUTER_BASE_URL,
+    model:
+      localStorage.getItem(OMNIROUTER_MODEL) ||
+      (import.meta as any).env?.VITE_OMNIROUTER_MODEL ||
+      DEFAULT_OMNIROUTER_MODEL,
+  };
+}
+
+export function saveOmniRouterConfig(config: Partial<OmniRouterConfig>) {
+  if (config.apiKey !== undefined) localStorage.setItem(OMNIROUTER_API_KEY, config.apiKey.trim());
+  if (config.baseUrl !== undefined) localStorage.setItem(OMNIROUTER_BASE_URL, config.baseUrl.trim());
+  if (config.model !== undefined) localStorage.setItem(OMNIROUTER_MODEL, config.model.trim());
+}
+
 export function getStoredGeminiApiKey(): string {
-  return localStorage.getItem(GEMINI_API_KEY) || (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+  return getStoredOmniRouterConfig().apiKey;
 }
 
 export function saveGeminiApiKey(key: string) {
-  localStorage.setItem(GEMINI_API_KEY, key.trim());
+  saveOmniRouterConfig({ apiKey: key });
 }
 
 export function getSupabaseClient() {
