@@ -35,6 +35,7 @@ import {
   getStoredOmniRouterConfig,
 } from './services/db';
 
+import { resolveBotUrl } from './services/zaloService';
 import { Header } from './components/Header';
 import { AuraBackground } from './components/AuraBackground';
 import { Dashboard } from './components/Dashboard';
@@ -251,7 +252,7 @@ export function App() {
     let isCancelled = false;
     const pollZaloActions = async () => {
       try {
-        const res = await fetch('http://localhost:5005/api/pending-actions');
+        const res = await fetch(resolveBotUrl('http://localhost:5005/api/pending-actions'));
         if (!res.ok) return;
         const actions = await res.json();
         if (Array.isArray(actions) && actions.length > 0 && !isCancelled) {
@@ -276,7 +277,7 @@ export function App() {
             }
           }
           if (consumedIds.length > 0) {
-            await fetch('http://localhost:5005/api/pending-actions/consume', {
+            await fetch(resolveBotUrl('http://localhost:5005/api/pending-actions/consume'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ids: consumedIds }),

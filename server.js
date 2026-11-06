@@ -805,7 +805,13 @@ const server = http.createServer((req, res) => {
       try {
         const payload = JSON.parse(body || '{}');
         const ids = payload.ids || [];
+        // Dự án đã được Web App nhận thì xóa khỏi file lưu, để khi khởi động lại bot không tạo lại.
+        const consumedSiteIds = pendingActions.filter(a => ids.includes(a.id) && a.site).map(a => a.site.id);
         pendingActions = pendingActions.filter(a => !ids.includes(a.id));
+        if (consumedSiteIds.length > 0) {
+          createdSites = createdSites.filter(x => !consumedSiteIds.includes(x.id));
+          try { fs.writeFileSync(SITES_STORE_PATH, JSON.stringify(createdSites, null, 2), 'utf-8'); } catch {}
+        }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ success: true, remaining: pendingActions.length }));
       } catch (err) {
