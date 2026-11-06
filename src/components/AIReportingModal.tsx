@@ -6,7 +6,12 @@ import {
   AttendanceRecord,
   ContentCalendarItem,
 } from '../types';
-import { generateAIReport, AIReportResult } from '../services/aiReporter';
+import {
+  generateAIReport,
+  AIReportResult,
+  testOmniRouterConnection,
+  OmniRouterTestResult,
+} from '../services/aiReporter';
 import {
   getStoredOmniRouterConfig,
   saveOmniRouterConfig,
@@ -31,8 +36,13 @@ import {
   Cpu,
   Eye,
   EyeOff,
-  Settings
+  Settings,
+  FlaskConical,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 interface AIReportingModalProps {
   isOpen: boolean;
@@ -66,10 +76,15 @@ export const AIReportingModal: React.FC<AIReportingModalProps> = ({
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [saveNotice, setSaveNotice] = useState<string>('');
 
+  // Test states
+  const [isTesting, setIsTesting] = useState<boolean>(false);
+  const [testResult, setTestResult] = useState<OmniRouterTestResult | null>(null);
+
   // Tạo báo cáo AI
   const handleGenerate = async (selectedPeriod: 'weekly' | 'monthly') => {
     setLoading(true);
     setPeriod(selectedPeriod);
+    setTestResult(null);
     try {
       const result = await generateAIReport(
         selectedPeriod,
@@ -100,6 +115,32 @@ export const AIReportingModal: React.FC<AIReportingModalProps> = ({
       setSaveNotice('');
       setShowConfig(false);
     }, 1500);
+  };
+
+  // Kiểm tra kết nối model OmniRouter
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const res = await testOmniRouterConnection({
+        apiKey: omniConfig.apiKey,
+        baseUrl: omniConfig.baseUrl,
+        model: omniConfig.model,
+      });
+      setTestResult(res);
+      if (res.success) {
+        try {
+          confetti({ particleCount: 60, spread: 60 });
+        } catch {}
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Lỗi không xác định khi gửi yêu cầu tới mô hình',
+      });
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   // Sao chép nội dung báo cáo để gửi Zalo cho Sếp / Cổ đông / Nhóm công ty
@@ -166,7 +207,7 @@ ${report.strategicRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
               <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500" />
             </h3>
             <p className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span>Được hỗ trợ bởi:</span>
+              <span>Mô hình chỉ định:</span>
               <span className="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 font-mono text-[11px]">
                 antigravity/gemini-3.8-flash-medium
               </span>
@@ -179,7 +220,7 @@ ${report.strategicRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleGenerate('weekly')}
-              disabled={loading}
+              disabled={loading || isTesting}
               className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 active:scale-95 ${
                 period === 'weekly' && report
                   ? 'bg-purple-600 text-white shadow-md'
@@ -192,7 +233,7 @@ ${report.strategicRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
             <button
               onClick={() => handleGenerate('monthly')}
-              disabled={loading}
+              disabled={loading || isTesting}
               className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 active:scale-95 ${
                 period === 'monthly' && report
                   ? 'bg-purple-600 text-white shadow-md'
@@ -204,30 +245,53 @@ ${report.strategicRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowConfig(!showConfig)}
-            className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition flex items-center gap-1.5 active:scale-95 ${
-              isConfigured
-                ? 'bg-purple-50 border-purple-300 text-purple-800 hover:bg-purple-100'
-                : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
-            }`}
-          >
-            <Cpu className="w-3.5 h-3.5" />
-            <span>{isConfigured ? '✓ OmniRouter: gemini-3.8' : '⚙️ Cài đặt OmniRouter'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Nút Test Model Nhanh */}
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={isTesting || loading}
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition flex items-center gap-1.5 active:scale-95 shadow-xs ${
+                isTesting
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                  : 'bg-white hover:bg-purple-50 border-purple-200 text-purple-700'
+              }`}
+              title="Gửi yêu cầu ping test tới mô hình antigravity/gemini-3.8-flash-medium"
+            >
+              {isTesting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
+              ) : (
+                <FlaskConical className="w-3.5 h-3.5 text-purple-600" />
+              )}
+              <span>{isTesting ? 'Đang test...' : '🧪 Test Model'}</span>
+            </button>
+
+            {/* Nút mở cài đặt OmniRouter */}
+            <button
+              type="button"
+              onClick={() => setShowConfig(!showConfig)}
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition flex items-center gap-1.5 active:scale-95 ${
+                isConfigured
+                  ? 'bg-purple-50 border-purple-300 text-purple-800 hover:bg-purple-100'
+                  : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5" />
+              <span>{isConfigured ? '✓ Cấu Hình' : '⚙️ Cài Đặt'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Cấu hình OmniRouter AI */}
+        {/* Hộp Cấu hình OmniRouter AI */}
         {showConfig && (
-          <form onSubmit={handleSaveConfig} className="p-4 bg-gradient-to-br from-purple-50/90 to-indigo-50/60 rounded-2xl border border-purple-200 mb-4 text-xs space-y-3 shadow-xs">
+          <form onSubmit={handleSaveConfig} className="p-4 bg-gradient-to-br from-purple-50/90 to-indigo-50/60 rounded-2xl border border-purple-200 mb-4 text-xs space-y-3 shadow-xs animate-in fade-in">
             <div className="flex items-center justify-between pb-1.5 border-b border-purple-200/80">
               <span className="font-black text-purple-950 flex items-center gap-1.5 text-xs">
                 <Settings className="w-4 h-4 text-purple-600" />
-                <span>Cấu Hình OmniRouter AI (Mô hình: antigravity/gemini-3.8-flash-medium)</span>
+                <span>Cấu Hình OmniRouter AI</span>
               </span>
-              <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
-                OpenAI-Compatible
+              <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md font-mono">
+                antigravity/gemini-3.8-flash-medium
               </span>
             </div>
 
@@ -282,16 +346,27 @@ ${report.strategicRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-purple-200/60">
               <span className="text-[11px] text-slate-500">
                 * Có thể lưu tại đây hoặc qua biến môi trường <code className="bg-purple-100 text-purple-900 px-1 py-0.5 rounded font-mono">VITE_OMNIROUTER_API_KEY</code> trên Vercel.
               </span>
-              <button
-                type="submit"
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition active:scale-95 shrink-0"
-              >
-                Lưu Cấu Hình
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={isTesting}
+                  className="bg-white hover:bg-purple-50 border border-purple-300 text-purple-700 font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs transition active:scale-95 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5 text-purple-600" />}
+                  <span>{isTesting ? 'Đang test...' : 'Kiểm Tra Kết Nối'}</span>
+                </button>
+                <button
+                  type="submit"
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-1.5 rounded-xl text-xs shadow-md transition active:scale-95 shrink-0"
+                >
+                  Lưu Cấu Hình
+                </button>
+              </div>
             </div>
 
             {saveNotice && (
@@ -303,7 +378,47 @@ ${report.strategicRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
           </form>
         )}
 
-        {/* Loading spinner */}
+        {/* Kết Quả Test Kết Nối Model */}
+        {testResult && (
+          <div className="mb-4 animate-in fade-in">
+            {testResult.success ? (
+              <div className="p-3.5 bg-emerald-50/90 border border-emerald-300 rounded-2xl text-xs text-emerald-950 space-y-1.5 shadow-xs">
+                <div className="flex items-center justify-between font-black text-emerald-800">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Mô Hình AI Hoạt Động Rất Tốt ({testResult.latencyMs}ms)!</span>
+                  </span>
+                  <span className="font-mono text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold border border-emerald-200">
+                    {testResult.modelUsed}
+                  </span>
+                </div>
+                <div className="text-[11px] text-emerald-800 bg-white/80 p-2.5 rounded-xl border border-emerald-200/80 font-medium leading-relaxed">
+                  💬 <b>Phản hồi trực tiếp từ mô hình:</b> "{testResult.message}"
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-rose-50/90 border border-rose-300 rounded-2xl text-xs text-rose-950 space-y-1.5 shadow-xs">
+                <div className="flex items-center justify-between font-black text-rose-800">
+                  <span className="flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>Kiểm Tra Kết Nối Thất Bại ({testResult.latencyMs || 0}ms)</span>
+                  </span>
+                  <span className="font-mono text-[10px] bg-rose-100 text-rose-800 px-2 py-0.5 rounded-md font-bold border border-rose-200">
+                    {testResult.modelUsed || 'antigravity/gemini-3.8-flash-medium'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-rose-800 bg-white/80 p-2.5 rounded-xl border border-rose-200/80 font-medium">
+                  ⚠️ <b>Chi tiết lỗi:</b> {testResult.message}
+                </div>
+                <p className="text-[10px] text-rose-600">
+                  💡 <b>Gợi ý:</b> Hãy kiểm tra lại API Key, Endpoint URL hoặc đảm bảo tài khoản OmniRouter có quyền truy cập mô hình này.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Loading spinner khi tạo báo cáo */}
         {loading && (
           <div className="py-12 text-center text-slate-500 space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center mx-auto shadow-md animate-bounce">

@@ -325,3 +325,108 @@ function buildReportObject(
     ],
   };
 }
+
+export interface OmniRouterTestResult {
+  success: boolean;
+  message: string;
+  modelUsed?: string;
+  latencyMs?: number;
+}
+
+export async function testOmniRouterConnection(overrideConfig?: {
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}): Promise<OmniRouterTestResult> {
+  const storedConfig = getStoredOmniRouterConfig();
+  const apiKey = (overrideConfig?.apiKey ?? storedConfig.apiKey).trim();
+  const baseUrl = (overrideConfig?.baseUrl ?? storedConfig.baseUrl).trim();
+  const model = (overrideConfig?.model ?? storedConfig.model).trim() || 'antigravity/gemini-3.8-flash-medium';
+
+  if (!apiKey) {
+    return {
+      success: false,
+      message: 'Vui lòng nhập OmniRouter API Key trước khi kiểm tra!',
+      modelUsed: model,
+    };
+  }
+
+  let endpoint = baseUrl;
+  if (!endpoint.endsWith('/chat/completions') && !endpoint.includes('generateContent')) {
+    endpoint = endpoint.replace(/\/+$/, '') + '/chat/completions';
+  }
+
+  const startTime = Date.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://quan-ly-ms.vercel.app',
+        'X-Title': 'MS Management Platform Test',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: 'Ping test: Hãy phản hồi đúng 1 câu ngắn gọn xác nhận bạn là mô hình AI và đã kết nối thành công với hệ thống MS Management.',
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 100,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    const latencyMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      let errorDetail = '';
+      try {
+        const errorJson = await response.json();
+        errorDetail = errorJson.error?.message || errorJson.message || JSON.stringify(errorJson);
+      } catch {
+        errorDetail = await response.text();
+      }
+      return {
+        success: false,
+        message: `Mã lỗi HTTP ${response.status}: ${errorDetail || 'Không có thông điệp lỗi chi tiết'}`,
+        modelUsed: model,
+        latencyMs,
+      };
+    }
+
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content?.trim() || 'Mô hình đã kết nối và phản hồi thành công.';
+
+    return {
+      success: true,
+      message: reply,
+      modelUsed: model,
+      latencyMs,
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    const latencyMs = Date.now() - startTime;
+    if (err.name === 'AbortError') {
+      return {
+        success: false,
+        message: 'Kết nối quá thời gian chờ (Timeout sau 15 giây). Vui lòng kiểm tra lại đường truyền mạng hoặc Endpoint URL!',
+        modelUsed: model,
+        latencyMs,
+      };
+    }
+    return {
+      success: false,
+      message: `Không thể kết nối tới OmniRouter: ${err.message || 'Lỗi mạng hoặc CORS'}`,
+      modelUsed: model,
+      latencyMs,
+    };
+  }
+}
