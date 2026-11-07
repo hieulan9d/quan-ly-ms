@@ -192,7 +192,7 @@ export function App() {
     try {
       const cfg = getStoredOmniRouterConfig();
       if (cfg.apiKey) {
-        fetch('http://localhost:5005/webhook/config', {
+        fetch(resolveBotUrl('http://localhost:5005/webhook/config'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cfg),

@@ -1,3 +1,4 @@
+import { resolveBotUrl } from './zaloService';
 import { createClient } from '@supabase/supabase-js';
 import {
   Employee,
@@ -128,7 +129,7 @@ export function saveOmniRouterConfig(config: Partial<OmniRouterConfig>) {
   // Tự động đồng bộ sang Bot Server Zalo nếu đang chạy trên port 5005
   try {
     const full = getStoredOmniRouterConfig();
-    fetch('http://localhost:5005/webhook/config', {
+    fetch(resolveBotUrl('http://localhost:5005/webhook/config'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(full),
