@@ -503,113 +503,271 @@ async function scopeForThread(threadId) {
   return 'all';
 }
 
-async function askGeminiAI(userMessage, threadId, senderName = 'Sếp', scope = 'all') {
-  if (!aiConfig.apiKey || !aiConfig.apiKey.trim()) {
-    if (/tạo.*(dự án|ốp tường|công trình|nano|lam sóng)/i.test(userMessage)) {
-      const p = parseProjectCommand(userMessage);
-      const newSite = createProjectFromCommand(p);
-      return (
-        `✅ Em đã nhận lệnh của Sếp và tạo dự án thành công trên Web!\n` +
-        `🪵 Tên dự án: ${newSite.name}\n` +
-        `📍 Địa chỉ: ${p.address}\n` +
-        `💰 Ngân sách/Giá trị: ${p.budget}\n` +
-        `⏳ Thời gian thi công: ${p.estimatedDays} ngày\n` +
-        `👤 Khách hàng: ${p.client}\n` +
-        `👉 Hồ sơ dự án đã được đồng bộ trực tiếp lên hệ thống Web MS Management! Sếp mở Web ra là thấy ngay nhé!`
-      );
-    }
+// ----------------- PHÂN QUYỀN: QUẢN LÝ ĐƯỢC SỬA DỮ LIỆU, NHÂN VIÊN CHỈ HỎI ĐÁP -----------------
 
+function normText(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .trim();
+}
+
+function findByIdOrName(list, key, nameOf) {
+  if (!key) return undefined;
+  const byId = list.find((x) => x.id === key);
+  if (byId) return byId;
+  const k = normText(key);
+  return (
+    list.find((x) => normText(nameOf(x)) === k) ||
+    list.find((x) => normText(nameOf(x)).includes(k) || k.includes(normText(nameOf(x))))
+  );
+}
+
+// Danh sách ID Zalo của quản lý lấy từ cài đặt trên web (zalo_config.managerZaloIds)
+async function isManagerSender(senderId) {
+  if (!senderId) return false;
+  try {
+    appDataCache.time = 0;
+    const data = await fetchAppData();
+    const ids = ((data && data.zalo_config[0] && data.zalo_config[0].managerZaloIds) || []).map((x) => String(x).trim());
+    return ids.includes(String(senderId));
+  } catch {
+    return false;
+  }
+}
+
+async function upsertRecord(collection, id, obj) {
+  const { url, key } = getSupabaseEnv();
+  if (!url || !key) throw new Error('Chưa cấu hình Supabase cho bot.');
+  const res = await fetch(`${url}/rest/v1/app_records?on_conflict=collection,id`, {
+    method: 'POST',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify([{ collection, id, data: obj, updated_at: new Date().toISOString() }]),
+  });
+  if (!res.ok) throw new Error('Supabase ' + res.status + ': ' + (await res.text()).slice(0, 120));
+  appDataCache.time = 0;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function describeBotAction(a) {
+  switch (a.type) {
+    case 'update_site_progress':
+      return a.addM2 !== undefined ? `Cộng thêm ${a.addM2} m² cho công trình "${a.site}"` : `Đặt khối lượng đã xong = ${a.setM2} m² cho công trình "${a.site}"`;
+    case 'create_site':
+      return `Tạo công trình "${a.name}"${a.address ? ' tại ' + a.address : ''}${a.totalAreaM2 ? ', ' + a.totalAreaM2 + ' m²' : ''}${a.estimatedDays ? ', ' + a.estimatedDays + ' ngày' : ''}`;
+    case 'create_task':
+      return `Tạo task "${a.title}"${a.assignee ? ' giao cho ' + a.assignee : ''}${a.deadline ? ', hạn ' + a.deadline : ''}`;
+    case 'update_task_status':
+      return `Chuyển task "${a.task}" sang ${a.status}`;
+    case 'set_calendar_done':
+      return `${a.done ? 'Đánh dấu XONG' : 'Bỏ đánh dấu xong'} lịch "${a.item}"`;
+    case 'set_attendance':
+      return `Chấm công ${a.employee} ngày ${a.date}: ${a.status || 'present'}${a.workUnits !== undefined ? ', ' + a.workUnits + ' công' : ''}${a.otHours ? ', tăng ca ' + a.otHours + 'h' : ''}`;
+    default:
+      return 'Hành động không hỗ trợ: ' + a.type;
+  }
+}
+
+// Thực thi các hành động đã được quản lý xác nhận. Trả về danh sách dòng kết quả.
+async function executeBotActions(actions, senderId) {
+  appDataCache.time = 0;
+  const data = await fetchAppData();
+  if (!data) return ['❌ Không đọc được dữ liệu hệ thống, chưa thay đổi gì.'];
+  const out = [];
+  const today = vnNowParts().date;
+
+  for (const a of actions) {
+    try {
+      if (a.type === 'update_site_progress') {
+        const site = findByIdOrName(data.sites, a.site, (s) => s.name);
+        if (!site) { out.push(`❌ Không tìm thấy công trình "${a.site}".`); continue; }
+        let next = a.setM2 !== undefined ? Number(a.setM2) : (Number(site.completedAreaM2) || 0) + Number(a.addM2 || 0);
+        if (!isFinite(next) || next < 0) { out.push('❌ Số m² không hợp lệ.'); continue; }
+        if (site.totalAreaM2 > 0) next = Math.min(next, site.totalAreaM2);
+        const updated = { ...site, completedAreaM2: next, status: site.totalAreaM2 > 0 && next >= site.totalAreaM2 ? 'completed' : site.status };
+        await upsertRecord('sites', site.id, updated);
+        out.push(`✅ ${site.name}: ${next}/${site.totalAreaM2} m²`);
+      } else if (a.type === 'create_site') {
+        if (!a.name) { out.push('❌ Thiếu tên công trình.'); continue; }
+        const days = Number(a.estimatedDays) > 0 ? Number(a.estimatedDays) : 5;
+        const end = addDaysISO(today, days);
+        const id = `site_${Date.now()}`;
+        const site = {
+          id, name: a.name, clientName: a.clientName || '', phone: '', address: a.address || '',
+          totalAreaM2: Number(a.totalAreaM2) > 0 ? Number(a.totalAreaM2) : 0, completedAreaM2: 0, panelType: '',
+          estimatedDays: days, actualDays: 1, startDate: today, expectedEndDate: end, status: 'planning',
+          assignedWorkers: [], photos: [], dailySchedules: [],
+        };
+        await upsertRecord('sites', id, site);
+        out.push(`✅ Đã tạo công trình "${a.name}".`);
+      } else if (a.type === 'create_task') {
+        if (!a.title) { out.push('❌ Thiếu tiêu đề task.'); continue; }
+        const emp = a.assignee ? findByIdOrName(data.employees, a.assignee, (e) => e.name) : undefined;
+        const id = `task_${Date.now()}`;
+        const task = {
+          id, title: a.title, client: a.client || '', assignedTo: emp ? emp.id : '',
+          deadline: DATE_RE.test(a.deadline || '') ? a.deadline : '', status: 'todo',
+          priority: ['low', 'medium', 'high'].includes(a.priority) ? a.priority : 'medium', notes: a.notes || '',
+        };
+        await upsertRecord('tasks', id, task);
+        out.push(`✅ Đã tạo task "${a.title}"${emp ? ' giao cho ' + emp.name : ' (chưa gán người)'}.`);
+      } else if (a.type === 'update_task_status') {
+        const task = findByIdOrName(data.tasks, a.task, (t) => t.title);
+        if (!task || !['todo', 'in_progress', 'review', 'done'].includes(a.status)) { out.push(`❌ Không cập nhật được task "${a.task}".`); continue; }
+        await upsertRecord('tasks', task.id, { ...task, status: a.status });
+        out.push(`✅ Task "${task.title}" → ${a.status}`);
+      } else if (a.type === 'set_calendar_done') {
+        const item = findByIdOrName(data.calendar, a.item, (c) => c.title);
+        if (!item) { out.push(`❌ Không tìm thấy lịch "${a.item}".`); continue; }
+        await upsertRecord('calendar', item.id, { ...item, isCompleted: !!a.done });
+        out.push(`✅ Lịch "${String(item.title).slice(0, 50)}": ${a.done ? 'đã xong' : 'chưa xong'}`);
+      } else if (a.type === 'set_attendance') {
+        const emp = findByIdOrName(data.employees, a.employee, (e) => e.name);
+        const date = DATE_RE.test(a.date || '') ? a.date : today;
+        const status = ['present', 'half_day', 'late', 'leave', 'absent'].includes(a.status) ? a.status : 'present';
+        if (!emp) { out.push(`❌ Không tìm thấy nhân sự "${a.employee}".`); continue; }
+        const defaultUnits = status === 'present' || status === 'late' ? 1 : status === 'half_day' ? 0.5 : 0;
+        const units = a.workUnits !== undefined && isFinite(Number(a.workUnits)) ? Number(a.workUnits) : defaultUnits;
+        const existing = data.attendance.find((r) => r.employeeId === emp.id && r.date === date);
+        const rec = {
+          ...(existing || {
+            id: `att_${Date.now()}`, employeeId: emp.id, companyId: emp.companyId, date,
+            checkInTime: '08:00', locationType: 'office',
+          }),
+          workUnits: units,
+          otHours: a.otHours !== undefined && isFinite(Number(a.otHours)) ? Number(a.otHours) : (existing ? existing.otHours : 0),
+          status,
+          note: a.note !== undefined ? String(a.note) : (existing ? existing.note : ''),
+          verifiedBy: 'Zalo Bot (quản lý ' + senderId + ')',
+        };
+        await upsertRecord('attendance', rec.id, rec);
+        out.push(`✅ Chấm công ${emp.name} ngày ${date}: ${status}, ${units} công`);
+      } else {
+        out.push('❌ Hành động không hỗ trợ.');
+      }
+      console.log(`🛠️ [QUẢN LÝ ${senderId}] ${describeBotAction(a)}`);
+    } catch (e) {
+      out.push('❌ Lỗi: ' + e.message);
+    }
+  }
+  return out;
+}
+
+function parseAiJson(text) {
+  let t = String(text || '').trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) t = fence[1].trim();
+  const first = t.indexOf('{');
+  const last = t.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    try {
+      const obj = JSON.parse(t.slice(first, last + 1));
+      return { reply: typeof obj.reply === 'string' ? obj.reply : '', actions: Array.isArray(obj.actions) ? obj.actions : [] };
+    } catch {}
+  }
+  return { reply: t, actions: [] };
+}
+
+const MANAGER_ACTION_SPEC = `
+BẠN ĐANG NÓI CHUYỆN VỚI QUẢN LÝ (có quyền sửa dữ liệu). Khi quản lý yêu cầu thay đổi dữ liệu, KHÔNG nói là đã làm xong: hãy đề xuất hành động, hệ thống sẽ hỏi quản lý xác nhận rồi mới ghi.
+Trả lời CHỈ bằng một đối tượng JSON, không thêm chữ nào ngoài JSON:
+{"reply": "<nội dung trả lời>", "actions": [ ... ]}
+"actions" là mảng rỗng nếu không cần sửa dữ liệu. Các hành động:
+- {"type":"update_site_progress","site":"<id hoặc tên công trình>","addM2":<số>}  hoặc  "setM2":<tổng m² đã xong>
+- {"type":"create_site","name":"...","address":"...","clientName":"...","totalAreaM2":<số>,"estimatedDays":<số>}
+- {"type":"create_task","title":"...","client":"...","assignee":"<tên nhân sự>","deadline":"YYYY-MM-DD","priority":"low|medium|high","notes":"..."}
+- {"type":"update_task_status","task":"<id hoặc tiêu đề>","status":"todo|in_progress|review|done"}
+- {"type":"set_calendar_done","item":"<id hoặc tiêu đề>","done":true|false}
+- {"type":"set_attendance","employee":"<tên nhân sự>","date":"YYYY-MM-DD","status":"present|half_day|late|leave|absent","workUnits":<số công>,"otHours":<giờ tăng ca>,"note":"..."}
+Không có hành động xóa dữ liệu.`;
+
+const STAFF_RULE = `
+BẠN ĐANG NÓI CHUYỆN VỚI NHÂN VIÊN/THỢ. Chỉ được TRẢ LỜI câu hỏi (lịch làm việc, lịch quay, lịch dựng, tiến độ, hạn nộp...). Nếu được nhờ tạo, sửa, xóa dữ liệu, chấm công, hay thay đổi cấu hình, hãy từ chối lịch sự và nói chức năng đó chỉ dành cho quản lý. Không tiết lộ lương, đơn giá hay thông tin chấm công của người khác. Trả lời bằng văn bản thường, không dùng JSON.`;
+
+/**
+ * Gọi model AI. Trả về { reply, actions }. Chỉ quản lý mới nhận được actions.
+ */
+async function askGeminiAI(userMessage, threadId, senderName = 'Sếp', scope = 'all', isManager = false) {
+  if (!aiConfig.apiKey || !aiConfig.apiKey.trim()) {
     if (/(?:xem|kiểm tra|báo cáo|cho xem)?\s*tiến\s*độ/i.test(userMessage) || /làm\s*(?:đến đâu|xong chưa)/i.test(userMessage)) {
       const ctx = await getSystemContext(scope);
-      return `📊 [BÁO CÁO TIẾN ĐỘ TỪ DỮ LIỆU THẬT CỦA HỆ THỐNG]
-
-${ctx}`;
+      return { reply: `📊 [BÁO CÁO TIẾN ĐỘ TỪ DỮ LIỆU THẬT CỦA HỆ THỐNG]\n\n${ctx}`, actions: [] };
     }
-
-    return (
-      `👋 Dạ em chào ${senderName}!\n\n` +
-      `Em là Trợ Lý AI của MS Management đang trực tuyến 24/7.\n` +
-      `📌 Sếp có thể nhắn cho em:\n` +
-      `1️⃣ "Xem tiến độ công trình" -> Em báo cáo chi tiết khối lượng, thợ, tiến độ.\n` +
-      `2️⃣ "Tạo 1 dự án ốp tường mới địa chỉ Ecopark số tiền 85 triệu làm trong 4 ngày" -> Em tự lên dự án trên Web ngay!\n\n` +
-      `💡 Để em trò chuyện tự nhiên và tư vấn sâu bằng model Gemini 3.8, Sếp hãy nhắn: setkey [MÃ_API_KEY] nhé!`
-    );
+    return {
+      reply:
+        '👋 Dạ em chào ' + senderName + '! Em đang trực tuyến nhưng chưa có API key AI nên chỉ trả lời được câu hỏi về tiến độ. ' +
+        (isManager ? 'Quản lý nhắn: setkey [MÃ_API_KEY] để bật trả lời thông minh.' : 'Anh/chị báo quản lý bật giúp em nhé.'),
+      actions: [],
+    };
   }
 
   let endpoint = (aiConfig.baseUrl || 'https://api.omnirouter.ai/v1/chat/completions').trim();
   if (!endpoint.endsWith('/chat/completions') && !endpoint.includes('generateContent')) {
     endpoint = endpoint.replace(/\/+$/, '') + '/chat/completions';
   }
-
   const activeModel = aiConfig.model || 'antigravity/gemini-3.8-flash-medium';
 
-  let actionNote = '';
-  if (/tạo.*(dự án|ốp tường|công trình|nano|lam sóng)/i.test(userMessage)) {
-    const p = parseProjectCommand(userMessage);
-    const newSite = createProjectFromCommand(p);
-    actionNote = `[HỆ THỐNG ĐÃ TỰ ĐỘNG TẠO DỰ ÁN TRÊN WEB THÀNH CÔNG: Tên="${newSite.name}", Địa chỉ="${p.address}", Ngân sách="${p.budget}", Thời gian="${p.estimatedDays} ngày"]`;
-  }
+  const systemPrompt = `Bạn là Trợ Lý AI Điều Hành (MS AI Assistant) của công ty MS, gồm:
+1. MS Ốp Tường Lam Sóng: thi công tấm ốp nhựa lam sóng & tấm phẳng Nano.
+2. MS Agency: sản xuất video TikTok/Reels/YouTube, nội dung cho khách hàng.
 
-  const systemPrompt = `Bạn là Trợ Lý AI Điều Hành Cao Cấp (MS AI Assistant) phục vụ trực tiếp cho Ban Giám Đốc và Đội Ngũ Công Ty MS.
-Công ty bao gồm:
-1. MS Ốp Tường Lam Sóng: Thi công tấm ốp nhựa lam sóng & tấm phẳng Nano cao cấp.
-2. MS Agency: Sản xuất video TikTok/Reels/YouTube, sáng tạo nội dung cho khách hàng.
-
-Tính cách:
-- Bạn là một CHATBOT AI thực thụ (${activeModel}), thông minh, tự nhiên, lễ phép (xưng "Em", gọi "Sếp" hoặc "anh/chị").
-- Trả lời bằng tiếng Việt gãy gọn, có chiều sâu, kèm icon phù hợp.
-- Hiểu ngữ cảnh và hỗ trợ tư vấn mọi vấn đề công việc.
-${actionNote ? `\nLƯU Ý QUAN TRỌNG: ${actionNote}. Hãy thông báo xác nhận đầy đủ và chúc mừng Sếp!` : ''}
+Tính cách: lễ phép, xưng "Em", gọi "Sếp" (quản lý) hoặc "anh/chị" (nhân viên). Tiếng Việt gãy gọn, kèm icon phù hợp.
+${isManager ? MANAGER_ACTION_SPEC : STAFF_RULE}
 
 [NGỮ CẢNH DỮ LIỆU HIỆN TẠI]:
 ${await getSystemContext(scope)}
 
-QUY TẮC BẮT BUỘC: Chỉ dùng số liệu, tên công trình, tên nhân sự có trong NGỮ CẢNH ở trên. TUYỆT ĐỐI không bịa thêm công trình, khối lượng m², tên người hay lịch. Nếu thông tin không có trong ngữ cảnh thì nói rõ là hệ thống chưa có dữ liệu đó.`;
+QUY TẮC BẮT BUỘC: Chỉ dùng số liệu, tên công trình, tên nhân sự có trong NGỮ CẢNH ở trên. TUYỆT ĐỐI không bịa thêm công trình, khối lượng m², tên người hay lịch. Nếu thông tin không có thì nói rõ là hệ thống chưa có dữ liệu đó.`;
 
   const history = getMemory(threadId);
 
   try {
-    console.log(`🧠 [GEMINI 3.8] Đang xử lý: "${userMessage.slice(0, 80)}"...`);
-
+    console.log(`🧠 [AI ${isManager ? 'QUẢN LÝ' : 'NHÂN VIÊN'}] Đang xử lý: "${userMessage.slice(0, 80)}"...`);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000);
-
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${aiConfig.apiKey.trim()}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiConfig.apiKey.trim()}` },
       body: JSON.stringify({
         model: activeModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...history,
-          { role: 'user', content: userMessage }
-        ],
-        temperature: 0.7,
+        messages: [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content: userMessage }],
+        temperature: 0.4,
         max_tokens: 1200,
       }),
       signal: controller.signal,
     });
-
     clearTimeout(timeoutId);
 
     if (response.ok) {
       const data = await response.json();
-      const reply = data.choices?.[0]?.message?.content || '';
-      if (reply) {
+      const raw = data.choices?.[0]?.message?.content || '';
+      if (raw) {
+        const parsed = isManager ? parseAiJson(raw) : { reply: raw.trim(), actions: [] };
+        const reply = parsed.reply || (parsed.actions.length ? 'Em đề xuất các thay đổi sau:' : raw.trim());
         addToMemory(threadId, 'user', userMessage);
         addToMemory(threadId, 'assistant', reply);
-        return reply.trim();
+        return { reply, actions: isManager ? parsed.actions : [] };
       }
     }
   } catch (err) {
-    console.error('Lỗi khi gọi model Gemini AI:', err.message);
+    console.error('Lỗi khi gọi model AI:', err.message);
   }
 
-  return `Dạ em đã nhận được yêu cầu của Sếp và ghi nhận vào hệ thống rồi ạ!`;
+  return { reply: 'Dạ em đã nhận được yêu cầu nhưng chưa xử lý được lúc này, anh/chị thử lại giúp em ạ!', actions: [] };
 }
+
+// Hành động đang chờ quản lý xác nhận: key = threadId:senderId
+const pendingConfirmations = new Map();
+const CONFIRM_TTL_MS = 10 * 60 * 1000;
+
 
 /**
  * Khởi động Zalo
@@ -688,19 +846,64 @@ async function initZaloConnection() {
             if (!rawContent) return;
             if (msg.isSelf) return;
 
-            const setKeyMatch = rawContent.match(/^(?:setkey|set_key|api_key|cài key|luu key)\s+([a-zA-Z0-9_\-\.\:\/]+)/i);
-            if (setKeyMatch) {
-              const newKey = setKeyMatch[1].trim();
-              saveAIConfig({ apiKey: newKey });
-              const confirmMsg = `✅ Em đã lưu thành công API Key của Gemini 3.8!\n🤖 Từ bây giờ em sẽ sử dụng trí tuệ nhân tạo Gemini 3.8 (${aiConfig.model}) để trò chuyện và trả lời tự nhiên mọi câu hỏi của Sếp và anh em 24/7! 🚀`;
-              await sendMessageToZalo(threadId, confirmMsg, isGroup ? ThreadTypeEnum.Group : ThreadTypeEnum.User);
+            const senderId = String(msg?.data?.uidFrom || '');
+            const replyType = isGroup ? ThreadTypeEnum.Group : ThreadTypeEnum.User;
+            const say = (t) => sendMessageToZalo(threadId, t, replyType);
+            const cleanContent = rawContent.replace(/@\S+/g, '').trim() || rawContent;
+
+            // Ai cũng hỏi được ID Zalo của mình (để quản lý gửi cho admin cấp quyền)
+            if (/^\/?(id|id của tôi|my id)$/i.test(cleanContent)) {
+              await say(`🆔 ID Zalo của anh/chị: ${senderId}\n(Nếu là quản lý, gửi ID này cho admin để được cấp quyền ra lệnh.)`);
               return;
             }
 
-            const cleanContent = rawContent.replace(/@\S+/g, '').trim() || rawContent;
-            const aiReply = await askGeminiAI(cleanContent, threadId, isGroup ? 'Sếp và cả nhóm' : 'Sếp', isGroup ? await scopeForThread(threadId) : 'all');
+            const manager = await isManagerSender(senderId);
 
-            await sendMessageToZalo(threadId, aiReply, isGroup ? ThreadTypeEnum.Group : ThreadTypeEnum.User);
+            const setKeyMatch = rawContent.match(/^(?:setkey|set_key|api_key|cài key|luu key)\s+([a-zA-Z0-9_\-\.\:\/]+)/i);
+            if (setKeyMatch) {
+              if (!manager) {
+                await say('⛔ Chức năng này chỉ dành cho quản lý ạ.');
+                return;
+              }
+              const newKey = setKeyMatch[1].trim();
+              saveAIConfig({ apiKey: newKey });
+              await say(`✅ Em đã lưu API Key mới. Từ giờ em dùng model ${aiConfig.model} để trả lời ạ!`);
+              return;
+            }
+
+            // Quản lý xác nhận / hủy các thay đổi đang chờ
+            const pkey = `${threadId}:${senderId}`;
+            if (manager) {
+              const pend = pendingConfirmations.get(pkey);
+              if (pend && Date.now() - pend.at < CONFIRM_TTL_MS) {
+                if (/^(ok|oke|okie|đồng ý|dong y|xác nhận|xac nhan|làm đi|lam di|yes|y)$/i.test(cleanContent)) {
+                  pendingConfirmations.delete(pkey);
+                  const lines = await executeBotActions(pend.actions, senderId);
+                  await say('📌 Kết quả:\n' + lines.join('\n') + '\n(Web sẽ tự cập nhật trong khoảng 20 giây.)');
+                  return;
+                }
+                if (/^(hủy|huỷ|huy|không|khong|bỏ|bo|no)$/i.test(cleanContent)) {
+                  pendingConfirmations.delete(pkey);
+                  await say('Dạ em đã hủy các thay đổi ạ.');
+                  return;
+                }
+              }
+            }
+
+            const scope = isGroup ? await scopeForThread(threadId) : 'all';
+            const result = await askGeminiAI(cleanContent, threadId, manager ? 'Sếp' : 'anh/chị', scope, manager);
+            let aiReply = result.reply;
+            if (manager && result.actions.length > 0) {
+              const valid = result.actions.filter((x) => x && typeof x.type === 'string');
+              if (valid.length > 0) {
+                pendingConfirmations.set(pkey, { actions: valid, at: Date.now() });
+                aiReply +=
+                  '\n\n📝 Em sẽ thực hiện:\n' +
+                  valid.map((x, i) => `${i + 1}. ${describeBotAction(x)}`).join('\n') +
+                  '\n\n👉 Trả lời "ok" để áp dụng hoặc "hủy" để bỏ qua (hiệu lực 10 phút).';
+              }
+            }
+            await say(aiReply);
           } catch (mErr) {
             console.error('Lỗi xử lý tin nhắn đến:', mErr.message);
           }

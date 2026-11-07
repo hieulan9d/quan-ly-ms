@@ -207,6 +207,7 @@ export interface ZaloConfig {
   alertTimes?: string[];       // Các giờ bot báo cáo lịch ngày mai (VD: ["08:00", "20:00"])
   groupOpTuongId?: string;     // ID nhóm Zalo khối Ốp Tường
   groupAgencyId?: string;      // ID nhóm Zalo khối Agency
+  managerZaloIds?: string[];   // ID Zalo của quản lý được phép ra lệnh sửa dữ liệu qua bot
   mentionAll?: boolean;        // Tag @all khi bot nhắn báo cáo
   lastAlertDate?: string;      // Ngày gần nhất đã gửi nhắc lịch
 }
