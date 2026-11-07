@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 > nul
-title Hệ Thống Quản Lý Chấm Công & Tiến Độ + Zalo Bot
+title Hệ Thống Quản Lý Chấm Công ^& Tiến Độ + Zalo Bot
 echo ==============================================================================
 echo        ĐANG KHỞI ĐỘNG FULL HỆ THỐNG MS MANAGEMENT VÀ ZALO BOT
 echo ==============================================================================

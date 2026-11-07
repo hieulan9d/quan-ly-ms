@@ -1,8 +1,8 @@
 @echo off
 chcp 65001 > nul
-title Triển Khai MS Management & Zalo AI Bot Trên VPS Windows
+title Triển Khai MS Management ^& Zalo AI Bot Trên VPS Windows
 echo ==============================================================================
-echo        TRIỂN KHAI HỆ THỐNG MS MANAGEMENT & ZALO BOT LÊN VPS WINDOWS
+echo        TRIỂN KHAI HỆ THỐNG MS MANAGEMENT ^& ZALO BOT LÊN VPS WINDOWS
 echo ==============================================================================
 echo.
 
