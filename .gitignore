@@ -32,3 +32,5 @@ scripts/zalo-qr.png
 scripts/ai-config.json
 !scripts/ai-config.example.json
 
+# Mật khẩu / thông tin nhạy cảm cục bộ
+passdatabase.txt
