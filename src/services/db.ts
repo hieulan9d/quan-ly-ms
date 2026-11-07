@@ -8,6 +8,7 @@ import {
   AgencyProject,
   AgencyRateConfig,
   ZaloConfig,
+  SiteMaterials,
 } from '../types';
 import {
   INITIAL_EMPLOYEES,
@@ -25,6 +26,7 @@ const TASKS_KEY = 'app_tasks_data';
 const ATTENDANCE_KEY = 'app_attendance_data';
 const CALENDAR_KEY = 'app_calendar_data';
 const PROJECTS_KEY = 'app_agency_projects_data';
+const MATERIALS_KEY = 'app_materials_data';
 const AGENCY_RATES_KEY = 'app_agency_shared_rates';
 const SUPABASE_CONFIG_KEY = 'app_supabase_config';
 const GEMINI_API_KEY = 'app_gemini_api_key';
@@ -330,6 +332,21 @@ export function saveAttendance(attendance: AttendanceRecord[]) {
   void syncCollection('attendance', attendance);
 }
 
+// ---------------- VẬT TƯ CÔNG TRÌNH (ỐP TƯỜNG) ----------------
+export function loadMaterials(): SiteMaterials[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(MATERIALS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveMaterials(materials: SiteMaterials[]) {
+  localStorage.setItem(MATERIALS_KEY, JSON.stringify(materials));
+  void syncCollection('materials', materials);
+}
+
 const TOCOTEA_SAMPLE_ITEMS: ContentCalendarItem[] = [
   {
     id: 'cal_tocotea_1',
@@ -438,7 +455,7 @@ export function formatDateVN(dateStr?: string): string {
 // Mỗi phần tử của mỗi danh sách là 1 dòng: (collection, id, data JSON).
 // Không cấu hình Supabase thì tất cả hàm bên dưới không làm gì, app chạy bằng localStorage như cũ.
 
-export type SyncCollection = 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects' | 'rates' | 'zalo_config';
+export type SyncCollection = 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects' | 'rates' | 'zalo_config' | 'materials';
 
 const COLLECTION_KEYS: Record<SyncCollection, string> = {
   employees: EMPLOYEES_KEY,
@@ -449,6 +466,7 @@ const COLLECTION_KEYS: Record<SyncCollection, string> = {
   projects: PROJECTS_KEY,
   rates: AGENCY_RATES_KEY,
   zalo_config: ZALO_CONFIG_KEY,
+  materials: MATERIALS_KEY,
 };
 
 const syncSnapshots: Partial<Record<SyncCollection, Map<string, string>>> = {};
@@ -513,8 +531,8 @@ export async function pullRemote(): Promise<RemoteData | null> {
     console.error('Supabase pull error:', error.message);
     return null;
   }
-  const result: RemoteData = { employees: [], sites: [], tasks: [], attendance: [], calendar: [], projects: [], rates: [], zalo_config: [], seeded: false };
-  (['employees', 'sites', 'tasks', 'attendance', 'calendar', 'projects', 'rates', 'zalo_config'] as SyncCollection[]).forEach((c) => {
+  const result: RemoteData = { employees: [], sites: [], tasks: [], attendance: [], calendar: [], projects: [], rates: [], zalo_config: [], materials: [], seeded: false };
+  (['employees', 'sites', 'tasks', 'attendance', 'calendar', 'projects', 'rates', 'zalo_config', 'materials'] as SyncCollection[]).forEach((c) => {
     syncSnapshots[c] = new Map();
   });
   for (const row of data || []) {

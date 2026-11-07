@@ -128,6 +128,27 @@ export interface ConstructionSite {
   dailySchedules?: DailySiteSchedule[];
 }
 
+// ---------------- VẬT TƯ CÔNG TRÌNH ỐP TƯỜNG ----------------
+export interface MaterialItem {
+  id: string;
+  name: string;
+  unit: string;          // tấm, thanh, hộp, kg, m...
+  unitPrice: number;     // VNĐ / 1 đơn vị
+  purchased: number;     // Số lượng mua đầu dự án
+  extra: number;         // Số lượng mua bổ sung trong lúc làm (do thiếu)
+  remaining: number | null; // Số lượng còn lại sau khi kết thúc (null = chưa kiểm kê)
+  normPerM2: number;     // Định mức dự kiến dùng / 1 m² (0 = không đặt định mức)
+  note?: string;
+}
+
+// Mỗi công trình có 1 bản ghi vật tư (id = `mat_${siteId}`)
+export interface SiteMaterials {
+  id: string;
+  siteId: string;
+  items: MaterialItem[];
+  closedAt?: string;     // Ngày đã kiểm kê & chốt vật tư khi kết thúc dự án
+}
+
 // ---------------- AGENCY DỰ ÁN & KHÁCH HÀNG ----------------
 export interface AgencyProject {
   id: string;

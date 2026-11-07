@@ -9,6 +9,7 @@ import {
   ContentCalendarItem,
   AgencyProject,
   AgencyRateConfig,
+  SiteMaterials,
 } from './types';
 import {
   loadEmployees,
@@ -24,6 +25,8 @@ import {
   loadAgencyProjects,
   saveAgencyProjects,
   loadAgencyRates,
+  loadMaterials,
+  saveMaterials,
   pullRemote,
   syncCollection,
   hasPendingSync,
@@ -43,6 +46,7 @@ import { AttendanceManager } from './components/AttendanceManager';
 import { WorkProgressManager } from './components/WorkProgressManager';
 import { AgencyContentCalendar } from './components/AgencyContentCalendar';
 import { ConstructionScheduleTracker } from './components/ConstructionScheduleTracker';
+import { MaterialManager } from './components/MaterialManager';
 import { StaffAndWageManager } from './components/StaffAndWageManager';
 import { PayrollManager } from './components/PayrollManager';
 import { SupabaseModal } from './components/SupabaseModal';
@@ -59,6 +63,7 @@ import {
   DollarSign,
   Calendar,
   Hammer,
+  Package,
 } from 'lucide-react';
 
 export function App() {
@@ -69,7 +74,7 @@ export function App() {
 
   // Current active tab
   const [currentTab, setCurrentTab] = useState<
-    'dashboard' | 'calendar' | 'schedule' | 'attendance' | 'progress' | 'staff' | 'payroll'
+    'dashboard' | 'calendar' | 'schedule' | 'materials' | 'attendance' | 'progress' | 'staff' | 'payroll'
   >('dashboard');
 
   // Modals
@@ -108,10 +113,11 @@ export function App() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(loadAttendance);
   const [calendarItems, setCalendarItems] = useState<ContentCalendarItem[]>(loadCalendar);
   const [agencyRates, setAgencyRates] = useState<AgencyRateConfig>(loadAgencyRates);
+  const [materials, setMaterials] = useState<SiteMaterials[]>(loadMaterials);
 
   // Đồng bộ Supabase: tải khi mở app, tải lại mỗi 20 giây và khi quay lại tab.
-  const localRef = useRef({ employees, sites, tasks, agencyProjects, attendance, calendarItems, agencyRates });
-  localRef.current = { employees, sites, tasks, agencyProjects, attendance, calendarItems, agencyRates };
+  const localRef = useRef({ employees, sites, tasks, agencyProjects, attendance, calendarItems, agencyRates, materials });
+  localRef.current = { employees, sites, tasks, agencyProjects, attendance, calendarItems, agencyRates, materials };
   useEffect(() => {
     let cancelled = false;
     let first = true;
@@ -121,7 +127,7 @@ export function App() {
       if (!remote || cancelled || hasPendingSync() || getSyncVersion() !== versionBefore) return;
       const local = localRef.current;
       const apply = <T extends { id: string }>(
-        name: 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects',
+        name: 'employees' | 'sites' | 'tasks' | 'attendance' | 'calendar' | 'projects' | 'materials',
         localItems: T[],
         setter: (v: T[]) => void
       ) => {
@@ -148,6 +154,7 @@ export function App() {
       apply('attendance', local.attendance, setAttendance);
       apply('calendar', local.calendarItems, setCalendarItems);
       apply('projects', local.agencyProjects, setAgencyProjects);
+      apply('materials', local.materials, setMaterials);
       const r = remote.rates[0];
       if (!r) {
         if (first && !remote.seeded) void syncCollection('rates', [{ id: 'default', ...local.agencyRates }]);
@@ -205,7 +212,7 @@ export function App() {
     // Khi đổi công ty, nếu đang ở tab chuyên biệt thì về dashboard hoặc tab tương ứng
     if (currentTab === 'calendar' && company === 'lam_song') {
       setCurrentTab('schedule');
-    } else if (currentTab === 'schedule' && company === 'agency') {
+    } else if ((currentTab === 'schedule' || currentTab === 'materials') && company === 'agency') {
       setCurrentTab('calendar');
     }
   };
@@ -295,6 +302,14 @@ export function App() {
       clearInterval(interval);
     };
   }, []);
+
+  // --- Handlers for Materials (Lam Sóng) ---
+  const handleSaveMaterials = (record: SiteMaterials) => {
+    const exists = materials.some((m) => m.id === record.id);
+    const updated = exists ? materials.map((m) => (m.id === record.id ? record : m)) : [record, ...materials];
+    setMaterials(updated);
+    saveMaterials(updated);
+  };
 
   // --- Handlers for Content Calendar (Agency) ---
   const handleSaveCalendarItem = (item: ContentCalendarItem) => {
@@ -435,6 +450,21 @@ export function App() {
               </button>
             )}
 
+            {/* TAB VẬT TƯ ỐP TƯỜNG */}
+            {!isAgency && (
+              <button
+                onClick={() => setCurrentTab('materials')}
+                className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
+                  currentTab === 'materials'
+                    ? 'border-orange-600 text-orange-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Package className="w-4 h-4 text-orange-600 shrink-0" />
+                <span>Vật Tư & Hao Hụt</span>
+              </button>
+            )}
+
             <button
               onClick={() => setCurrentTab('attendance')}
               className={`py-3 lg:py-3.5 border-b-2 transition flex items-center gap-1.5 lg:gap-2 whitespace-nowrap ${
@@ -539,6 +569,16 @@ export function App() {
           />
         )}
 
+        {currentTab === 'materials' && !isAgency && (
+          <MaterialManager
+            sites={sites}
+            materials={materials}
+            isAdmin={isAdmin}
+            onRequireAdmin={handleRequireAdmin}
+            onSaveMaterials={handleSaveMaterials}
+          />
+        )}
+
         {currentTab === 'attendance' && (
           <AttendanceManager
             currentCompany={currentCompany}
@@ -599,7 +639,7 @@ export function App() {
 
       {/* 4. Mobile Bottom Navigation Bar (Full 6 Tabs) */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg md:hidden pb-safe">
-        <div className="grid grid-cols-6 text-center py-1.5 px-0.5">
+        <div className={`grid ${isAgency ? 'grid-cols-6' : 'grid-cols-7'} text-center py-1.5 px-0.5`}>
           <button
             onClick={() => setCurrentTab('dashboard')}
             className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
@@ -638,6 +678,20 @@ export function App() {
             >
               <Hammer className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="truncate max-w-full px-0.5">Lịch thợ</span>
+            </button>
+          )}
+
+          {!isAgency && (
+            <button
+              onClick={() => setCurrentTab('materials')}
+              className={`flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                currentTab === 'materials'
+                  ? 'text-orange-600 bg-orange-50/70'
+                  : 'text-slate-500 active:bg-slate-100'
+              }`}
+            >
+              <Package className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="truncate max-w-full px-0.5">Vật tư</span>
             </button>
           )}
 
