@@ -52,6 +52,7 @@ import { PayrollManager } from './components/PayrollManager';
 import { SupabaseModal } from './components/SupabaseModal';
 import { IphoneGuideModal } from './components/IphoneGuideModal';
 import { AIReportingModal } from './components/AIReportingModal';
+import { AIChatWidget } from './components/AIChatWidget';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { isAdminLoggedIn, logoutAdmin } from './services/auth';
 
@@ -775,6 +776,18 @@ export function App() {
         agencyRates={agencyRates}
         initialTab={aiReportInitialTab}
         onSaveSite={handleSaveSite}
+      />
+
+      <AIChatWidget
+        employees={employees}
+        sites={sites}
+        tasks={tasks}
+        calendar={calendarItems}
+        isAdmin={isAdmin}
+        onRequireAdmin={() => setIsAdminModalOpen(true)}
+        onSaveSite={handleSaveSite}
+        onSaveTask={handleSaveTask}
+        onSaveCalendarItem={handleSaveCalendarItem}
       />
 
       <AdminLoginModal
