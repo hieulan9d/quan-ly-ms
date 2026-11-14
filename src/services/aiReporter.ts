@@ -386,14 +386,17 @@ export async function testOmniRouterConnection(overrideConfig?: {
     clearTimeout(timeoutId);
     const latencyMs = Date.now() - startTime;
 
+    const rawBody = await response.text();
+    let data: any = null;
+    try {
+      data = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      data = null;
+    }
+
     if (!response.ok) {
-      let errorDetail = '';
-      try {
-        const errorJson = await response.json();
-        errorDetail = errorJson.error?.message || errorJson.message || JSON.stringify(errorJson);
-      } catch {
-        errorDetail = await response.text();
-      }
+      const errorDetail =
+        data?.error?.message || data?.message || (data ? JSON.stringify(data) : rawBody.slice(0, 300));
       return {
         success: false,
         message: `Mã lỗi HTTP ${response.status}: ${errorDetail || 'Không có thông điệp lỗi chi tiết'}`,
@@ -402,7 +405,15 @@ export async function testOmniRouterConnection(overrideConfig?: {
       };
     }
 
-    const data = await response.json();
+    if (!data) {
+      return {
+        success: false,
+        message: `Endpoint không trả về JSON hợp lệ (kiểm tra lại Endpoint URL): ${rawBody.slice(0, 200)}`,
+        modelUsed: model,
+        latencyMs,
+      };
+    }
+
     const reply = data.choices?.[0]?.message?.content?.trim() || 'Mô hình đã kết nối và phản hồi thành công.';
 
     return {

@@ -113,6 +113,7 @@ export const AIReportingModal: React.FC<AIReportingModalProps> = ({
 
   // Zalo & AI Config States
   const [zaloConfig, setZaloConfig] = useState<ZaloConfig>(getStoredZaloConfig);
+  const [managerIdsText, setManagerIdsText] = useState<string>(() => (getStoredZaloConfig().managerZaloIds || []).join(', '));
   const [showZaloLogin, setShowZaloLogin] = useState(false);
   const [isSendingReportNow, setIsSendingReportNow] = useState(false);
   const [groupList, setGroupList] = useState<ZaloGroupItem[]>([]);
@@ -1471,21 +1472,19 @@ ${r.strategicRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
                   <div className="text-xs font-bold text-slate-700">Quản lý được ra lệnh cho bot (ID Zalo)</div>
                   <input
                     type="text"
-                    value={(zaloConfig.managerZaloIds || []).join(', ')}
-                    onChange={(e) =>
+                    value={managerIdsText}
+                    onChange={(e) => {
+                      setManagerIdsText(e.target.value);
                       setZaloConfig({
                         ...zaloConfig,
-                        managerZaloIds: e.target.value
-                          .split(/[\s,;]+/)
-                          .map((x) => x.trim())
-                          .filter(Boolean),
-                      })
-                    }
+                        managerZaloIds: (e.target.value.match(/\d{5,}/g) || []),
+                      });
+                    }}
                     placeholder="VD: 1234567890123456789, 9876543210987654321"
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white"
                   />
                   <p className="text-[11px] text-slate-500">
-                    Chỉ những ID này được bảo bot tạo/sửa dữ liệu (công trình, task, lịch, chấm công), và mỗi lần bot sẽ hỏi xác nhận "ok". Mọi người khác chỉ hỏi đáp. Để biết ID: người đó nhắn "id" cho bot trên Zalo. Để trống nghĩa là chưa ai có quyền sửa.
+                    Nhập nhiều quản lý: cách nhau bằng dấu phẩy (VD: 123..., 456...). Chỉ những ID này được bảo bot tạo/sửa dữ liệu (công trình, task, lịch, chấm công), và mỗi lần bot sẽ hỏi xác nhận "ok". Mọi người khác chỉ hỏi đáp. Để biết ID: người đó nhắn "id" cho bot trên Zalo. Để trống nghĩa là chưa ai có quyền sửa.
                   </p>
                 </div>
 

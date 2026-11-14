@@ -117,6 +117,29 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
     setEditingProject(null);
   };
 
+  // Hoàn thành / mở lại dự án (Chỉ Admin)
+  const handleToggleCompleteProject = (site: ConstructionSite, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!isAdmin) {
+      onRequireAdmin?.();
+      return;
+    }
+    const done = site.status === 'completed';
+    if (!done && !window.confirm(`Xác nhận HOÀN THÀNH dự án "${site.name}"?`)) return;
+    onSaveSite({
+      ...site,
+      status: done ? 'installing' : 'completed',
+      actualEndDate: done ? undefined : new Date().toISOString().split('T')[0],
+    } as ConstructionSite);
+    setNoticeMessage(done ? `Đã mở lại dự án "${site.name}".` : `✓ Đã hoàn thành dự án "${site.name}"!`);
+    setTimeout(() => setNoticeMessage(''), 4000);
+    if (!done) {
+      try {
+        confetti({ particleCount: 80, spread: 70 });
+      } catch {}
+    }
+  };
+
   // Xóa dự án (Chỉ Admin)
   const handleDeleteProject = (siteId: string, siteName: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -451,6 +474,18 @@ export const ConstructionScheduleTracker: React.FC<ConstructionScheduleTrackerPr
                   >
                     <Edit3 className="w-3.5 h-3.5 text-orange-600" />
                     <span>Sửa Dự Án</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggleCompleteProject(site, e)}
+                    className={`text-xs font-bold border px-2.5 py-1 rounded-lg transition active:scale-95 ${
+                      isCompleted
+                        ? 'text-slate-600 bg-slate-50 border-slate-200 hover:bg-slate-100'
+                        : 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {isCompleted ? '↩ Mở lại' : '✓ Hoàn thành'}
                   </button>
 
                   <button

@@ -531,7 +531,7 @@ async function isManagerSender(senderId) {
   try {
     appDataCache.time = 0;
     const data = await fetchAppData();
-    const ids = ((data && data.zalo_config[0] && data.zalo_config[0].managerZaloIds) || []).map((x) => String(x).trim());
+    const ids = ((data && data.zalo_config[0] && data.zalo_config[0].managerZaloIds) || []).map((x) => String(x).replace(/\D/g, ''));
     return ids.includes(String(senderId));
   } catch {
     return false;
@@ -852,7 +852,7 @@ async function initZaloConnection() {
             const cleanContent = rawContent.replace(/@\S+/g, '').trim() || rawContent;
 
             // Ai cũng hỏi được ID Zalo của mình (để quản lý gửi cho admin cấp quyền)
-            if (/^\/?(id|id của tôi|my id)$/i.test(cleanContent)) {
+            if (/^\/?\s*(?:lấy\s+|cho\s+(?:em|tôi|mình)\s+xin\s+)?(?:id|my id|id\s+(?:của\s+)?(?:tôi|em|mình)|id\s+zalo)\s*[?!.]*$/i.test(cleanContent)) {
               await say(`🆔 ID Zalo của anh/chị: ${senderId}\n(Nếu là quản lý, gửi ID này cho admin để được cấp quyền ra lệnh.)`);
               return;
             }

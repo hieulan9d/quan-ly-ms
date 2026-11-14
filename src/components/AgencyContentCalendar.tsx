@@ -93,7 +93,10 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
   const [selectedItem, setSelectedItem] = useState<ContentCalendarItem | null>(null);
 
   // Month filter
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-10');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [showImportModal, setShowImportModal] = useState(false);
 
   // Add event modal state
@@ -144,10 +147,15 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
   // ---------------- TẠO DANH SÁCH 35 Ô LỊCH (5 TUẦN × 7 NGÀY) THEO THÁNG 10–11 ----------------
   const daysGrid: { dayOfWeek: string; dayNumber: string; dateStr: string }[] = useMemo(() => {
     const grid: { dayOfWeek: string; dayNumber: string; dateStr: string }[] = [];
-    const startDay = new Date(2026, 9, 5); // 05/10/2026 (Thứ 2)
+    const [yy, mm] = selectedMonth.split('-').map(Number);
+    const first = new Date(yy, (mm || 1) - 1, 1);
+    const daysInMonth = new Date(yy, mm || 1, 0).getDate();
+    const offset = (first.getDay() + 6) % 7; // Thứ 2 = 0
+    const startDay = new Date(yy, (mm || 1) - 1, 1 - offset);
+    const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
     const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
 
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < totalCells; i++) {
       const d = new Date(startDay);
       d.setDate(startDay.getDate() + i);
       const dayOfMonth = String(d.getDate()).padStart(2, '0');
@@ -158,7 +166,7 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
       grid.push({ dayOfWeek, dayNumber, dateStr });
     }
     return grid;
-  }, []);
+  }, [selectedMonth]);
 
   // ---------------- HỖ TRỢ NHIỀU SỰ KIỆN TRONG 1 NGÀY (ITEMS BY DAY) ----------------
   const itemsByDay = useMemo(() => {
@@ -622,8 +630,19 @@ export const AgencyContentCalendar: React.FC<AgencyContentCalendarProps> = ({
 
           {/* Action buttons */}
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
+              className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800"
+              title="Chọn tháng xem lịch"
+            />
+
             <button
-              onClick={() => handleOpenAddModalForDay('05/10', 'Thứ 2')}
+              onClick={() => {
+                const f = daysGrid.find((c) => c.dateStr.startsWith(selectedMonth)) || daysGrid[0];
+                handleOpenAddModalForDay(f.dayNumber, f.dayOfWeek);
+              }}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md active:scale-95"
             >
               <Plus className="w-4 h-4 text-white" />
