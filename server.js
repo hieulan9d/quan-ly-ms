@@ -572,6 +572,10 @@ function describeBotAction(a) {
       return `Tạo công trình "${a.name}"${a.address ? ' tại ' + a.address : ''}${a.totalAreaM2 ? ', ' + a.totalAreaM2 + ' m²' : ''}${a.estimatedDays ? ', ' + a.estimatedDays + ' ngày' : ''}`;
     case 'create_task':
       return `Tạo task "${a.title}"${a.assignee ? ' giao cho ' + a.assignee : ''}${a.deadline ? ', hạn ' + a.deadline : ''}`;
+    case 'create_project':
+      return `Tạo dự án Agency "${a.name}"${a.clientContact ? ', liên hệ ' + a.clientContact : ''}${a.targetPostsPerMonth ? ', ' + a.targetPostsPerMonth + ' bài/tháng' : ''}`;
+    case 'create_calendar_event':
+      return `Tạo lịch ${a.kind || 'quay'} "${a.title}" cho dự án "${a.client || ''}" ngày ${a.date}${a.time ? ' ' + a.time : ''}`;
     case 'update_task_status':
       return `Chuyển task "${a.task}" sang ${a.status}`;
     case 'set_calendar_done':
@@ -626,6 +630,39 @@ async function executeBotActions(actions, senderId) {
         };
         await upsertRecord('tasks', id, task);
         out.push(`✅ Đã tạo task "${a.title}"${emp ? ' giao cho ' + emp.name : ' (chưa gán người)'}.`);
+      } else if (a.type === 'create_project') {
+        if (!a.name) { out.push('❌ Thiếu tên dự án.'); continue; }
+        const id = `proj_${Date.now()}`;
+        const proj = {
+          id, name: a.name, clientContact: a.clientContact || '', phone: a.phone || '',
+          servicePackage: a.servicePackage || 'Gói Content & Video Mạng Xã Hội',
+          monthlyRetainer: Number(a.monthlyRetainer) > 0 ? Number(a.monthlyRetainer) : 15000000,
+          targetPostsPerMonth: Number(a.targetPostsPerMonth) > 0 ? Number(a.targetPostsPerMonth) : 20,
+          startDate: DATE_RE.test(a.startDate || '') ? a.startDate : today, status: 'active',
+          notes: a.notes || '', color: '#8b5cf6',
+        };
+        await upsertRecord('projects', id, proj);
+        out.push(`✅ Đã tạo dự án Agency "${a.name}".`);
+      } else if (a.type === 'create_calendar_event') {
+        if (!a.title) { out.push('❌ Thiếu tiêu đề lịch.'); continue; }
+        const date = DATE_RE.test(a.date || '') ? a.date : today;
+        const [yy, mm, dd] = date.split('-');
+        const dow = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'][new Date(Number(yy), Number(mm) - 1, Number(dd)).getDay()];
+        const kindMap = { shoot: 'Lịch quay', edit: 'Lịch edit', post: 'Bài đăng', other: 'Khác' };
+        const loai = kindMap[a.kind] || 'Lịch quay';
+        const pick = (nm) => { const e = nm ? findByIdOrName(data.employees, nm, (x) => x.name) : undefined; return e ? e.id : undefined; };
+        const proj = a.client ? findByIdOrName(data.projects || [], a.client, (x) => x.name) : undefined;
+        const id = `cal_event_${Date.now()}`;
+        const item = {
+          id, title: a.title, client: proj ? proj.name : (a.client || ''),
+          channel: ['tiktok', 'facebook', 'youtube', 'website'].includes(a.channel) ? a.channel : 'tiktok',
+          month: `${yy}-${mm}`, dayNumber: `${dd}/${mm}`, dayOfWeek: dow, timeStr: a.time || '09h00',
+          loai, truc: 'series', writerId: pick(a.writer), shooterId: pick(a.shooter), editorId: pick(a.editor),
+          editDeadline: DATE_RE.test(a.deadline || '') ? a.deadline : date, shootDate: date,
+          isCompleted: false, notes: a.notes || '',
+        };
+        await upsertRecord('calendar', id, item);
+        out.push(`✅ Đã tạo lịch ${loai} "${a.title}" ngày ${dd}/${mm}${proj ? ' cho dự án ' + proj.name : ''}.`);
       } else if (a.type === 'update_task_status') {
         const task = findByIdOrName(data.tasks, a.task, (t) => t.title);
         if (!task || !['todo', 'in_progress', 'review', 'done'].includes(a.status)) { out.push(`❌ Không cập nhật được task "${a.task}".`); continue; }
@@ -690,10 +727,13 @@ Trả lời CHỈ bằng một đối tượng JSON, không thêm chữ nào ngo
 "actions" là mảng rỗng nếu không cần sửa dữ liệu. Các hành động:
 - {"type":"update_site_progress","site":"<id hoặc tên công trình>","addM2":<số>}  hoặc  "setM2":<tổng m² đã xong>
 - {"type":"create_site","name":"...","address":"...","clientName":"...","totalAreaM2":<số>,"estimatedDays":<số>}
+- {"type":"create_project","name":"<tên dự án/khách hàng Agency>","clientContact":"...","phone":"...","servicePackage":"...","monthlyRetainer":<số>,"targetPostsPerMonth":<số>,"startDate":"YYYY-MM-DD","notes":"..."}  (DÙNG khi quản lý nói "tạo dự án" cho Agency; đây KHÔNG phải task)
+- {"type":"create_calendar_event","title":"...","client":"<tên dự án Agency>","date":"YYYY-MM-DD","kind":"shoot|edit|post|other","time":"09h00","writer":"<tên>","shooter":"<tên>","editor":"<tên>","deadline":"YYYY-MM-DD","channel":"tiktok|facebook|youtube|website","notes":"..."}  (DÙNG khi quản lý nói "tạo kế hoạch/lịch quay/lịch edit/lịch đăng bài"; đây KHÔNG phải task)
 - {"type":"create_task","title":"...","client":"...","assignee":"<tên nhân sự>","deadline":"YYYY-MM-DD","priority":"low|medium|high","notes":"..."}
 - {"type":"update_task_status","task":"<id hoặc tiêu đề>","status":"todo|in_progress|review|done"}
 - {"type":"set_calendar_done","item":"<id hoặc tiêu đề>","done":true|false}
 - {"type":"set_attendance","employee":"<tên nhân sự>","date":"YYYY-MM-DD","status":"present|half_day|late|leave|absent","workUnits":<số công>,"otHours":<giờ tăng ca>,"note":"..."}
+Chỉ dùng create_task khi quản lý nói rõ "task" / "giao việc". "Tạo dự án" => create_project; "tạo kế hoạch / lịch" => create_calendar_event (có thể nhiều hành động cho nhiều ngày). Nếu thiếu thông tin bắt buộc (ngày, tên), hãy hỏi lại trong "reply" và để actions rỗng.
 Không có hành động xóa dữ liệu.`;
 
 const STAFF_RULE = `
