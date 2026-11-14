@@ -717,6 +717,15 @@ function parseAiJson(text) {
       return { reply: typeof obj.reply === 'string' ? obj.reply : '', actions: Array.isArray(obj.actions) ? obj.actions : [] };
     } catch {}
   }
+  // JSON bị cắt dở: không đưa nguyên khối JSON cho người dùng, chỉ lấy phần reply.
+  if (/^\s*[{`]/.test(String(text || ''))) {
+    const m = t.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    const reply = m ? m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+    return {
+      reply: (reply ? reply + '\n\n' : '') + '⚠️ Câu trả lời của AI bị cắt giữa chừng nên em chưa tạo được gì. Sếp nhắn lại giúp em nhé.',
+      actions: [],
+    };
+  }
   return { reply: t, actions: [] };
 }
 
@@ -787,7 +796,7 @@ QUY TẮC BẮT BUỘC: Chỉ dùng số liệu, tên công trình, tên nhân s
         model: activeModel,
         messages: [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content: userMessage }],
         temperature: 0.4,
-        max_tokens: 1200,
+        max_tokens: 4000,
       }),
       signal: controller.signal,
     });
