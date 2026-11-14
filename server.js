@@ -432,6 +432,10 @@ async function sendScheduledReport(config) {
   const targets = [];
   if (isId(config && config.groupOpTuongId)) targets.push({ id: String(config.groupOpTuongId).trim(), scope: 'op' });
   if (isId(config && config.groupAgencyId)) targets.push({ id: String(config.groupAgencyId).trim(), scope: 'agency' });
+  if (targets.length === 2 && targets[0].id === targets[1].id) {
+    // Cùng 1 nhóm cho cả 2 khối: gửi 1 báo cáo chung thay vì 2 bản.
+    targets.splice(0, 2, { id: targets[0].id, scope: 'all' });
+  }
   if (targets.length === 0) {
     // Chưa cấu hình 2 nhóm riêng: gửi 1 báo cáo chung vào nhóm mặc định như cũ.
     const legacy = config && isId(config.groupNameOrId) ? String(config.groupNameOrId).trim() : activeGroupId;
@@ -497,8 +501,11 @@ async function scopeForThread(threadId) {
   try {
     const data = await fetchAppData();
     const c = (data && data.zalo_config[0]) || {};
-    if (String(c.groupOpTuongId || '') === String(threadId)) return 'op';
-    if (String(c.groupAgencyId || '') === String(threadId)) return 'agency';
+    const isOp = String(c.groupOpTuongId || '') === String(threadId);
+    const isAg = String(c.groupAgencyId || '') === String(threadId);
+    if (isOp && isAg) return 'all'; // 1 nhóm dùng chung cho cả 2 khối
+    if (isOp) return 'op';
+    if (isAg) return 'agency';
   } catch {}
   return 'all';
 }

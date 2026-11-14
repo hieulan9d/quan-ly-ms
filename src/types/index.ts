@@ -208,6 +208,8 @@ export interface ZaloConfig {
   groupOpTuongId?: string;     // ID nhóm Zalo khối Ốp Tường
   groupAgencyId?: string;      // ID nhóm Zalo khối Agency
   managerZaloIds?: string[];   // ID Zalo của quản lý được phép ra lệnh sửa dữ liệu qua bot
+  omniBaseUrl?: string;        // Base URL AI (đồng bộ giữa các máy, KHÔNG gồm API key)
+  omniModel?: string;          // Model AI (đồng bộ giữa các máy)
   mentionAll?: boolean;        // Tag @all khi bot nhắn báo cáo
   lastAlertDate?: string;      // Ngày gần nhất đã gửi nhắc lịch
 }

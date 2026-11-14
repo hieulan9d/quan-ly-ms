@@ -168,6 +168,15 @@ export function App() {
         cacheCollectionLocally('rates', [rates]);
         setAgencyRates(rates);
       }
+      // Cấu hình Zalo/bot: kéo từ Supabase về để máy khác cũng thấy cài đặt đã lưu.
+      const z = remote.zalo_config[0];
+      if (z) {
+        const { id: _zid, ...zRest } = z as any;
+        const cur = localStorage.getItem('app_zalo_config');
+        if (!cur || JSON.stringify(JSON.parse(cur)) !== JSON.stringify(zRest)) {
+          cacheCollectionLocally('zalo_config', [zRest]);
+        }
+      }
       if (first) {
         markSeedDone();
         if (!remote.seeded) void markRemoteSeeded();

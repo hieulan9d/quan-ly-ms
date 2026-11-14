@@ -126,6 +126,12 @@ export function saveOmniRouterConfig(config: Partial<OmniRouterConfig>) {
   if (config.baseUrl !== undefined) localStorage.setItem(OMNIROUTER_BASE_URL, config.baseUrl.trim());
   if (config.model !== undefined) localStorage.setItem(OMNIROUTER_MODEL, config.model.trim());
 
+  // Đồng bộ URL & model (không gồm API key) qua Supabase để máy khác cũng có
+  if (config.baseUrl !== undefined || config.model !== undefined) {
+    const cur = getStoredOmniRouterConfig();
+    saveZaloConfig({ omniBaseUrl: cur.baseUrl, omniModel: cur.model });
+  }
+
   // Tự động đồng bộ sang Bot Server Zalo nếu đang chạy trên port 5005
   try {
     const full = getStoredOmniRouterConfig();
@@ -566,6 +572,8 @@ export function cacheCollectionLocally(collection: SyncCollection, items: any[])
     const z = items[0];
     if (z) {
       localStorage.setItem(ZALO_CONFIG_KEY, JSON.stringify(z));
+      if (z.omniBaseUrl) localStorage.setItem(OMNIROUTER_BASE_URL, z.omniBaseUrl);
+      if (z.omniModel) localStorage.setItem(OMNIROUTER_MODEL, z.omniModel);
     }
     return;
   }
